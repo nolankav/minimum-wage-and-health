@@ -222,7 +222,8 @@ design_sub <- subset(design_all, age %in% c(3:17))
 # At least 1 outcome
 merged <- merged %>% mutate(
   has_outcome = case_when(
-    !is.na(depression) | !is.na(anxiety) | !is.na(behavior) | !is.na(stomach_r) ~ 1
+    !is.na(depression) | !is.na(anxiety) | !is.na(behavior) |
+      !is.na(stomach_r) | !is.na(missed_school) ~ 1
   ))
 
 # Complete cases for covariates
@@ -601,6 +602,40 @@ model_min_sch_7 <- svyglm(missed_school ~ Effective.Minimum.Wage*race_eth_cat +
                             year + fipsst,
                           design = design_sub)
 
+# Get range of sample sizes
+list <- cbind(
+  # Depression
+  length(model_min_dep_1$residuals), length(model_min_dep_2$residuals),
+  length(model_min_dep_3$residuals), length(model_min_dep_4$residuals),
+  length(model_min_dep_5$residuals), length(model_min_dep_6$residuals),
+  length(model_min_dep_7$residuals),
+  
+  # Anxiety
+  length(model_min_anx_1$residuals), length(model_min_anx_2$residuals),
+  length(model_min_anx_3$residuals), length(model_min_anx_4$residuals),
+  length(model_min_anx_5$residuals), length(model_min_anx_6$residuals),
+  length(model_min_anx_7$residuals),
+  
+  # Behavioral problems
+  length(model_min_beh_1$residuals), length(model_min_beh_2$residuals),
+  length(model_min_beh_3$residuals), length(model_min_beh_4$residuals),
+  length(model_min_beh_5$residuals), length(model_min_beh_6$residuals),
+  length(model_min_beh_7$residuals),
+  
+  # Digestive issues
+  length(model_min_dig_1$residuals), length(model_min_dig_2$residuals),
+  length(model_min_dig_3$residuals), length(model_min_dig_4$residuals),
+  length(model_min_dig_5$residuals), length(model_min_dig_6$residuals),
+  length(model_min_dig_7$residuals),
+  
+  # Missed school
+  length(model_min_sch_1$residuals), length(model_min_sch_2$residuals),
+  length(model_min_sch_3$residuals), length(model_min_sch_4$residuals),
+  length(model_min_sch_5$residuals), length(model_min_sch_6$residuals),
+  length(model_min_sch_7$residuals)
+  )
+min(list); max(list)
+
 # Extract coefficients of interest
 interaction_vals <- as.data.frame(rbind(
   # Depression
@@ -696,10 +731,10 @@ interaction_vals$se     <- as.numeric(interaction_vals$se)
 # Generate coefficient plot
 plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=effect,
                                          group=Sample, color=Sample)) +
-  geom_point(position = position_dodge(width=0.5), size=1, aes(shape=Sample)) +
+  geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
   scale_shape_manual(values = 1:nlevels(interaction_vals$Sample)) +
   geom_errorbar(aes(ymin=effect-1.96*se, ymax=effect+1.96*se),
-                position = position_dodge(width=0.5), width=0.4) +
+                position = position_dodge(width=0.6), width=0.4) +
   ylab("Effect of $1 increase in minimum wage\non mental health outcomes") +
   theme_test() +
   theme(legend.position = "right",
@@ -717,7 +752,7 @@ plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=effect,
                      breaks = c(-0.02, -0.01, 0, 0.01, 0.02),
                      minor_breaks = seq(-0.02, 0.02, 0.01),
                      labels = function(x) paste0(x*100," pp")) +
-  scale_color_manual(values=c("grey70", "grey60", "grey50", "grey40", "grey30", "grey20", "grey10"))
+  scale_color_grey(start=0, end=0.6)
 
 # Export figure
 ggsave(plot=plot_int, file="Coefficient plot.pdf", width=6.5, height=4, units='in', dpi=600)
