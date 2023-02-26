@@ -720,4 +720,4 @@ plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=effect,
   scale_color_manual(values=c("grey70", "grey60", "grey50", "grey40", "grey30", "grey20", "grey10"))
 
 # Export figure
-ggsave(plot=plot_int, file="Subgroup analyses.pdf", width=6.5, height=4, units='in', dpi=600)
+ggsave(plot=plot_int, file="Coefficient plot.pdf", width=6.5, height=4, units='in', dpi=600)
