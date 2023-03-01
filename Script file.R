@@ -752,7 +752,7 @@ plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=effect,
                      breaks = c(-0.02, -0.01, 0, 0.01, 0.02),
                      minor_breaks = seq(-0.02, 0.02, 0.01),
                      labels = function(x) paste0(x*100," pp")) +
-  scale_color_grey(start=0, end=0.6)
+  scale_color_grey(start=0, end=0.7)
 
 # Export figure
 ggsave(plot=plot_int, file="Coefficient plot.pdf", width=6.5, height=4, units='in', dpi=600)
