@@ -379,18 +379,18 @@ means_all <- as.data.frame(rbind(
   cbind("Digestive issues", "400% or greater", means_dig$Mean[5], means_dig$SE[5]),
   
   # Unmet health care needs (any)
-  cbind("Unmet health care needs\n(of any kind)", "Less than 100%",  means_unm$Mean[1], means_unm$SE[1]),
-  cbind("Unmet health care needs\n(of any kind)", "100% to 199%",    means_unm$Mean[2], means_unm$SE[2]),
-  cbind("Unmet health care needs\n(of any kind)", "200% to 299%",    means_unm$Mean[3], means_unm$SE[3]),
-  cbind("Unmet health care needs\n(of any kind)", "300% to 399%",    means_unm$Mean[4], means_unm$SE[4]),
-  cbind("Unmet health care needs\n(of any kind)", "400% or greater", means_unm$Mean[5], means_unm$SE[5]),
+  cbind("Unmet health care\n(of any kind)", "Less than 100%",  means_unm$Mean[1], means_unm$SE[1]),
+  cbind("Unmet health care\n(of any kind)", "100% to 199%",    means_unm$Mean[2], means_unm$SE[2]),
+  cbind("Unmet health care\n(of any kind)", "200% to 299%",    means_unm$Mean[3], means_unm$SE[3]),
+  cbind("Unmet health care\n(of any kind)", "300% to 399%",    means_unm$Mean[4], means_unm$SE[4]),
+  cbind("Unmet health care\n(of any kind)", "400% or greater", means_unm$Mean[5], means_unm$SE[5]),
   
   # Unmet health care needs (mental health)
-  cbind("Unmet health care needs\n(mental health)", "Less than 100%",  means_men$Mean[1], means_men$SE[1]),
-  cbind("Unmet health care needs\n(mental health)", "100% to 199%",    means_men$Mean[2], means_men$SE[2]),
-  cbind("Unmet health care needs\n(mental health)", "200% to 299%",    means_men$Mean[3], means_men$SE[3]),
-  cbind("Unmet health care needs\n(mental health)", "300% to 399%",    means_men$Mean[4], means_men$SE[4]),
-  cbind("Unmet health care needs\n(mental health)", "400% or greater", means_men$Mean[5], means_men$SE[5]),
+  cbind("Unmet health care\n(mental health)", "Less than 100%",  means_men$Mean[1], means_men$SE[1]),
+  cbind("Unmet health care\n(mental health)", "100% to 199%",    means_men$Mean[2], means_men$SE[2]),
+  cbind("Unmet health care\n(mental health)", "200% to 299%",    means_men$Mean[3], means_men$SE[3]),
+  cbind("Unmet health care\n(mental health)", "300% to 399%",    means_men$Mean[4], means_men$SE[4]),
+  cbind("Unmet health care\n(mental health)", "400% or greater", means_men$Mean[5], means_men$SE[5]),
   
   # Missed school
   cbind("Missed school", "Less than 100%",  means_sch$Mean[1], means_sch$SE[1]),
@@ -403,7 +403,7 @@ colnames(means_all) <- c("Outcome", "FPL level", "value", "se")
 
 # Reorder factor levels
 means_all$`FPL level` <- factor(means_all$`FPL level`, levels = c("Less than 100%", "100% to 199%", "200% to 299%", "300% to 399%", "400% or greater"))
-means_all$Outcome <- factor(means_all$Outcome, levels = c("Depression", "Anxiety", "Behavioral prob.", "Digestive issues", "Unmet health care needs\n(of any kind)", "Unmet health care needs\n(mental health)", "Missed school"))
+means_all$Outcome <- factor(means_all$Outcome, levels = c("Depression", "Anxiety", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
 
 # Treat adjusted means and SEs as numeric
 means_all$value <- as.numeric(as.character(means_all$value))
@@ -433,7 +433,7 @@ plot_1 <- ggplot(means_all, aes(x=`FPL level`, y=value, fill=`FPL level`)) +
 print(plot_1)
 
 # Export figure
-ggsave(plot=plot_1, file="Adjusted rates of outcomes.pdf", width=7, height=4, units='in', dpi=600)
+ggsave(plot=plot_1, file="Adjusted rates of outcomes.pdf", width=10.35, height=4, units='in', dpi=600)
 
 ##############################################################################
 # Figure 1: U.S. maps for minimum wages
@@ -805,35 +805,35 @@ interaction_vals <- as.data.frame(rbind(
         model_min_dig_5$coefficients[2], SE(model_min_dig_5)[2]),
   
   # Unmet health care needs (any)
-  cbind("Unmet health care needs\n(of any kind)", "All children (unadjusted)",
+  cbind("Unmet health care\n(of any kind)", "All children (unadjusted)",
         model_min_unm_1$coefficients[2], SE(model_min_unm_1)[2]),
-  cbind("Unmet health care needs\n(of any kind)", "All children (adjusted)",
+  cbind("Unmet health care\n(of any kind)", "All children (adjusted)",
         model_min_unm_2$coefficients[2], SE(model_min_unm_2)[2]),
-  cbind("Unmet health care needs\n(of any kind)", "Less than 200% FPL",
+  cbind("Unmet health care\n(of any kind)", "Less than 200% FPL",
         model_min_unm_3$coefficients[2], SE(model_min_unm_3)[2]),
-  cbind("Unmet health care needs\n(of any kind)", "Non-white children",
+  cbind("Unmet health care\n(of any kind)", "Non-white children",
         model_min_unm_7$coefficients[2], SE(model_min_unm_7)[2]),
-  cbind("Unmet health care needs\n(of any kind)", "Adolescents, age 13-17",
+  cbind("Unmet health care\n(of any kind)", "Adolescents, age 13-17",
         model_min_unm_6$coefficients[2], SE(model_min_unm_6)[2]),
-  cbind("Unmet health care needs\n(of any kind)", "All children (2020 dollars)",
+  cbind("Unmet health care\n(of any kind)", "All children (2020 dollars)",
         model_min_unm_4$coefficients[2], SE(model_min_unm_4)[2]),
-  cbind("Unmet health care needs\n(of any kind)", "All children (lagged wage)",
+  cbind("Unmet health care\n(of any kind)", "All children (lagged wage)",
         model_min_unm_5$coefficients[2], SE(model_min_unm_5)[2]),
   
   # Unmet mental health care
-  cbind("Unmet health care needs\n(mental health)", "All children (unadjusted)",
+  cbind("Unmet health care\n(mental health)", "All children (unadjusted)",
         model_min_men_1$coefficients[2], SE(model_min_men_1)[2]),
-  cbind("Unmet health care needs\n(mental health)", "All children (adjusted)",
+  cbind("Unmet health care\n(mental health)", "All children (adjusted)",
         model_min_men_2$coefficients[2], SE(model_min_men_2)[2]),
-  cbind("Unmet health care needs\n(mental health)", "Less than 200% FPL",
+  cbind("Unmet health care\n(mental health)", "Less than 200% FPL",
         model_min_men_3$coefficients[2], SE(model_min_men_3)[2]),
-  cbind("Unmet health care needs\n(mental health)", "Non-white children",
+  cbind("Unmet health care\n(mental health)", "Non-white children",
         model_min_men_7$coefficients[2], SE(model_min_men_7)[2]),
-  cbind("Unmet health care needs\n(mental health)", "Adolescents, age 13-17",
+  cbind("Unmet health care\n(mental health)", "Adolescents, age 13-17",
         model_min_men_6$coefficients[2], SE(model_min_men_6)[2]),
-  cbind("Unmet health care needs\n(mental health)", "All children (2020 dollars)",
+  cbind("Unmet health care\n(mental health)", "All children (2020 dollars)",
         model_min_men_4$coefficients[2], SE(model_min_men_4)[2]),
-  cbind("Unmet health care needs\n(mental health)", "All children (lagged wage)",
+  cbind("Unmet health care\n(mental health)", "All children (lagged wage)",
         model_min_men_5$coefficients[2], SE(model_min_men_5)[2]),
   
   # Missed 1+ week of school
@@ -855,7 +855,7 @@ interaction_vals <- as.data.frame(rbind(
 colnames(interaction_vals) <- c("Outcome", "Sample", "effect", "se")
 
 # Reorder factor variables
-interaction_vals$Outcome <- factor(interaction_vals$Outcome, levels=c("Depression", "Anxiety", "Behavioral prob.", "Digestive issues", "Unmet health care needs\n(of any kind)", "Unmet health care needs\n(mental health)", "Missed school"))
+interaction_vals$Outcome <- factor(interaction_vals$Outcome, levels=c("Depression", "Anxiety", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
 interaction_vals$Sample <- factor(interaction_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Non-white children", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)"))
 
 # Treat columns as numeric
