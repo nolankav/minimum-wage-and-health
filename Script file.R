@@ -123,11 +123,11 @@ merged$race_eth <- factor(merged$race_eth, levels = c("White, non-Hispanic/Latin
 # White vs. non-white for interaction models
 merged <- merged %>% mutate(
   race_eth_cat = case_when(
-    sc_hispanic_r == 1    ~ "Non-white",
-    sc_race_r == 1        ~ "White",
-    sc_race_r %in% c(2:7) ~ "Non-white",
+    sc_hispanic_r == 1    ~ "Black or Hispanic/Latino",
+    sc_race_r == 2        ~ "Black or Hispanic/Latino",
+    sc_race_r %in% c(1,3:7) ~ "Other races",
   ))
-merged$race_eth_cat <- factor(merged$race_eth_cat, levels = c("Non-white", "White"))
+merged$race_eth_cat <- factor(merged$race_eth_cat, levels = c("Black or Hispanic/Latino", "Other races"))
 
 # Adults' highest educational attainment
 merged <- merged %>% mutate(
@@ -747,7 +747,7 @@ interaction_vals <- as.data.frame(rbind(
         model_min_dep_2$coefficients[2], SE(model_min_dep_2)[2]),
   cbind("Depression",       "Less than 200% FPL",
         model_min_dep_3$coefficients[2], SE(model_min_dep_3)[2]),
-  cbind("Depression",       "Non-white children",
+  cbind("Depression",       "Black or Hispanic/Latino",
         model_min_dep_7$coefficients[2], SE(model_min_dep_7)[2]),
   cbind("Depression",       "Adolescents, age 13-17",
         model_min_dep_6$coefficients[2], SE(model_min_dep_6)[2]),
@@ -763,7 +763,7 @@ interaction_vals <- as.data.frame(rbind(
         model_min_anx_2$coefficients[2], SE(model_min_anx_2)[2]),
   cbind("Anxiety",          "Less than 200% FPL",
         model_min_anx_3$coefficients[2], SE(model_min_anx_3)[2]),
-  cbind("Anxiety",          "Non-white children",
+  cbind("Anxiety",          "Black or Hispanic/Latino",
         model_min_anx_7$coefficients[2], SE(model_min_anx_7)[2]),
   cbind("Anxiety",          "Adolescents, age 13-17",
         model_min_anx_6$coefficients[2], SE(model_min_anx_6)[2]),
@@ -779,7 +779,7 @@ interaction_vals <- as.data.frame(rbind(
         model_min_beh_2$coefficients[2], SE(model_min_beh_2)[2]),
   cbind("Behavioral prob.", "Less than 200% FPL",
         model_min_beh_3$coefficients[2], SE(model_min_beh_3)[2]),
-  cbind("Behavioral prob.", "Non-white children",
+  cbind("Behavioral prob.", "Black or Hispanic/Latino",
         model_min_beh_7$coefficients[2], SE(model_min_beh_7)[2]),
   cbind("Behavioral prob.", "Adolescents, age 13-17",
         model_min_beh_6$coefficients[2], SE(model_min_beh_6)[2]),
@@ -795,7 +795,7 @@ interaction_vals <- as.data.frame(rbind(
         model_min_dig_2$coefficients[2], SE(model_min_dig_2)[2]),
   cbind("Digestive issues", "Less than 200% FPL",
         model_min_dig_3$coefficients[2], SE(model_min_dig_3)[2]),
-  cbind("Digestive issues", "Non-white children",
+  cbind("Digestive issues", "Black or Hispanic/Latino",
         model_min_dig_7$coefficients[2], SE(model_min_dig_7)[2]),
   cbind("Digestive issues", "Adolescents, age 13-17",
         model_min_dig_6$coefficients[2], SE(model_min_dig_6)[2]),
@@ -811,7 +811,7 @@ interaction_vals <- as.data.frame(rbind(
         model_min_unm_2$coefficients[2], SE(model_min_unm_2)[2]),
   cbind("Unmet health care\n(of any kind)", "Less than 200% FPL",
         model_min_unm_3$coefficients[2], SE(model_min_unm_3)[2]),
-  cbind("Unmet health care\n(of any kind)", "Non-white children",
+  cbind("Unmet health care\n(of any kind)", "Black or Hispanic/Latino",
         model_min_unm_7$coefficients[2], SE(model_min_unm_7)[2]),
   cbind("Unmet health care\n(of any kind)", "Adolescents, age 13-17",
         model_min_unm_6$coefficients[2], SE(model_min_unm_6)[2]),
@@ -827,7 +827,7 @@ interaction_vals <- as.data.frame(rbind(
         model_min_men_2$coefficients[2], SE(model_min_men_2)[2]),
   cbind("Unmet health care\n(mental health)", "Less than 200% FPL",
         model_min_men_3$coefficients[2], SE(model_min_men_3)[2]),
-  cbind("Unmet health care\n(mental health)", "Non-white children",
+  cbind("Unmet health care\n(mental health)", "Black or Hispanic/Latino",
         model_min_men_7$coefficients[2], SE(model_min_men_7)[2]),
   cbind("Unmet health care\n(mental health)", "Adolescents, age 13-17",
         model_min_men_6$coefficients[2], SE(model_min_men_6)[2]),
@@ -843,7 +843,7 @@ interaction_vals <- as.data.frame(rbind(
         model_min_sch_2$coefficients[2], SE(model_min_sch_2)[2]),
   cbind("Missed school",    "Less than 200% FPL",
         model_min_sch_3$coefficients[2], SE(model_min_sch_3)[2]),
-  cbind("Missed school",    "Non-white children",
+  cbind("Missed school",    "Black or Hispanic/Latino",
         model_min_sch_7$coefficients[2], SE(model_min_sch_7)[2]),
   cbind("Missed school",    "Adolescents, age 13-17",
         model_min_sch_6$coefficients[2], SE(model_min_sch_6)[2]),
@@ -856,7 +856,7 @@ colnames(interaction_vals) <- c("Outcome", "Sample", "effect", "se")
 
 # Reorder factor variables
 interaction_vals$Outcome <- factor(interaction_vals$Outcome, levels=c("Depression", "Anxiety", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
-interaction_vals$Sample <- factor(interaction_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Non-white children", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)"))
+interaction_vals$Sample <- factor(interaction_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Black or Hispanic/Latino", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)"))
 
 # Treat columns as numeric
 interaction_vals$effect <- as.numeric(interaction_vals$effect)
