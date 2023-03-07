@@ -1,6 +1,6 @@
 # Minimum wage and children's health
 # N.M. Kavanagh, N. Slopen
-# February 25, 2023
+# March 6, 2023
 
 # Please direct questions about this script file to nolankavanagh@fas.harvard.edu.
 
@@ -185,6 +185,13 @@ merged <- merged %>% mutate(
     k2q34b %in% c(2) | k2q34a %in% c(1:2) ~ 0
   ))
 
+# Current ADD/ADHD
+merged <- merged %>% mutate(
+  adhd = case_when(
+    k2q31b %in% c(1)                      ~ 1,
+    k2q31b %in% c(2) | k2q31a %in% c(1:2) ~ 0
+  ))
+
 # Stomach/digestive issues
 merged <- merged %>% mutate(
   stomach_r = case_when(
@@ -236,7 +243,7 @@ design_sub <- subset(design_all, age %in% c(3:17))
 # At least 1 outcome
 merged <- merged %>% mutate(
   has_outcome = case_when(
-    !is.na(depression) | !is.na(anxiety) | !is.na(behavior) |
+    !is.na(depression) | !is.na(anxiety) | !is.na(behavior) | !is.na(adhd) |
       !is.na(stomach_r) | !is.na(missed_school) ~ 1
   ))
 
@@ -264,6 +271,7 @@ summary(tableby(~ age + sex + race_eth + adult_edu + fpl_category,
 prop.table(svytable(~fpl_category + depression,    design=design_sub), 1)
 prop.table(svytable(~fpl_category + anxiety,       design=design_sub), 1)
 prop.table(svytable(~fpl_category + behavior,      design=design_sub), 1)
+prop.table(svytable(~fpl_category + adhd,          design=design_sub), 1)
 prop.table(svytable(~fpl_category + stomach_r,     design=design_sub), 1)
 prop.table(svytable(~fpl_category + unmet_needs,   design=design_sub), 1)
 prop.table(svytable(~fpl_category + unmet_mental,  design=design_sub), 1)
@@ -281,6 +289,12 @@ model_fpl_anx <- svyglm(anxiety ~
                           year + fipsst,
                         design = design_sub)
 summary(model_fpl_anx)
+
+model_fpl_add <- svyglm(adhd ~
+                          age + sex + race_eth + adult_edu + fpl_category +
+                          year + fipsst,
+                        design = design_sub)
+summary(model_fpl_add)
 
 model_fpl_beh <- svyglm(behavior ~
                           age + sex + race_eth + adult_edu + fpl_category +
@@ -312,36 +326,10 @@ model_fpl_sch <- svyglm(missed_school ~
                         design = design_sub)
 summary(model_fpl_sch)
 
-# Prepare table for adjusted associations
-cov_row <- as.data.frame(
-  rbind(cbind("Child demographics",        t(rep("Yes",   4))),
-        cbind("State fixed effects",       t(rep("Yes",   4))),
-        cbind("Year fixed effects",        t(rep("Yes",   4))),
-        cbind("Clustered standard errors", t(rep("State", 4))),
-        cbind("Survey weights",            t(rep("Yes",   4)))))
-
-# Compile results into table
-modelsummary(list("Depression"       = model_fpl_dep,
-                  "Anxiety"          = model_fpl_anx,
-                  "Behavioral prob." = model_fpl_beh,
-                  "Stomach issues"   = model_fpl_dig,
-                  "Missed school"    = model_fpl_sch),
-             coef_omit   = "^(?!fpl_category)",
-             fmt         = "%.3f",
-             statistic   = c("[{conf.low}, {conf.high}]", "P={p.value}"),
-             gof_omit    = "Log*|AIC|BIC|F|RMSE|Std",
-             coef_map    = c("fpl_categoryLess than 100%"  = "Less than 100%",
-                             "fpl_category100% to 199%"    = "100% to 199%",
-                             "fpl_category200% to 299%"    = "200% to 299%",
-                             "fpl_category300% to 399%"    = "300% to 399%",
-                             "fpl_category400% or greater" = "400% or greater"),
-             add_rows    = cov_row,
-             title       = "Association between household FPL and indicated outcomes (linear probability models).",
-             stars       = c("*"=0.05, "**"=0.01, "***"=0.001))
-
 # Generate marginal means
 means_dep <- estimate_means(model_fpl_dep, at="fpl_category")
 means_anx <- estimate_means(model_fpl_anx, at="fpl_category")
+means_add <- estimate_means(model_fpl_add, at="fpl_category")
 means_beh <- estimate_means(model_fpl_beh, at="fpl_category")
 means_dig <- estimate_means(model_fpl_dig, at="fpl_category")
 means_unm <- estimate_means(model_fpl_unm, at="fpl_category")
@@ -363,6 +351,13 @@ means_all <- as.data.frame(rbind(
   cbind("Anxiety", "200% to 299%",    means_anx$Mean[3], means_anx$SE[3]),
   cbind("Anxiety", "300% to 399%",    means_anx$Mean[4], means_anx$SE[4]),
   cbind("Anxiety", "400% or greater", means_anx$Mean[5], means_anx$SE[5]),
+  
+  # ADD/ADHD
+  cbind("ADD/ADHD", "Less than 100%",  means_add$Mean[1], means_add$SE[1]),
+  cbind("ADD/ADHD", "100% to 199%",    means_add$Mean[2], means_add$SE[2]),
+  cbind("ADD/ADHD", "200% to 299%",    means_add$Mean[3], means_add$SE[3]),
+  cbind("ADD/ADHD", "300% to 399%",    means_add$Mean[4], means_add$SE[4]),
+  cbind("ADD/ADHD", "400% or greater", means_add$Mean[5], means_add$SE[5]),
   
   # Behavioral problems
   cbind("Behavioral prob.", "Less than 100%",  means_beh$Mean[1], means_beh$SE[1]),
@@ -403,7 +398,7 @@ colnames(means_all) <- c("Outcome", "FPL level", "value", "se")
 
 # Reorder factor levels
 means_all$`FPL level` <- factor(means_all$`FPL level`, levels = c("Less than 100%", "100% to 199%", "200% to 299%", "300% to 399%", "400% or greater"))
-means_all$Outcome <- factor(means_all$Outcome, levels = c("Depression", "Anxiety", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
+means_all$Outcome <- factor(means_all$Outcome, levels = c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
 
 # Treat adjusted means and SEs as numeric
 means_all$value <- as.numeric(as.character(means_all$value))
@@ -555,6 +550,35 @@ model_min_anx_6 <- svyglm(anxiety ~ Effective.Minimum.Wage*age_cat +
                             year + fipsst,
                           design = design_sub)
 model_min_anx_7 <- svyglm(anxiety ~ Effective.Minimum.Wage*race_eth_cat +
+                            age + sex + race_eth + adult_edu + fpl_category +
+                            year + fipsst,
+                          design = design_sub)
+
+# Models for ADD/ADHD
+model_min_add_1 <- svyglm(adhd ~ Effective.Minimum.Wage +
+                            year + fipsst,
+                          design = design_sub)
+model_min_add_2 <- svyglm(adhd ~ Effective.Minimum.Wage +
+                            age + sex + race_eth + adult_edu + fpl_category +
+                            year + fipsst,
+                          design = design_sub)
+model_min_add_3 <- svyglm(adhd ~ Effective.Minimum.Wage*low_income +
+                            age + sex + race_eth + adult_edu + fpl_category +
+                            year + fipsst,
+                          design = design_sub)
+model_min_add_4 <- svyglm(adhd ~ Effective.Minimum.Wage.2020.Dollars +
+                            age + sex + race_eth + adult_edu + fpl_category +
+                            year + fipsst,
+                          design = design_sub)
+model_min_add_5 <- svyglm(adhd ~ lag_by_1 +
+                            age + sex + race_eth + adult_edu + fpl_category +
+                            year + fipsst,
+                          design = design_sub)
+model_min_add_6 <- svyglm(adhd ~ Effective.Minimum.Wage*age_cat +
+                            age + sex + race_eth + adult_edu + fpl_category +
+                            year + fipsst,
+                          design = design_sub)
+model_min_add_7 <- svyglm(adhd ~ Effective.Minimum.Wage*race_eth_cat +
                             age + sex + race_eth + adult_edu + fpl_category +
                             year + fipsst,
                           design = design_sub)
@@ -772,6 +796,22 @@ interaction_vals <- as.data.frame(rbind(
   cbind("Anxiety",          "All children (lagged wage)",
         model_min_anx_5$coefficients[2], SE(model_min_anx_5)[2]),
   
+  # ADD/ADHD
+  cbind("ADD/ADHD",          "All children (unadjusted)",
+        model_min_add_1$coefficients[2], SE(model_min_add_1)[2]),
+  cbind("ADD/ADHD",          "All children (adjusted)",
+        model_min_add_2$coefficients[2], SE(model_min_add_2)[2]),
+  cbind("ADD/ADHD",          "Less than 200% FPL",
+        model_min_add_3$coefficients[2], SE(model_min_add_3)[2]),
+  cbind("ADD/ADHD",          "Black or Hispanic/Latino",
+        model_min_add_7$coefficients[2], SE(model_min_add_7)[2]),
+  cbind("ADD/ADHD",          "Adolescents, age 13-17",
+        model_min_add_6$coefficients[2], SE(model_min_add_6)[2]),
+  cbind("ADD/ADHD",          "All children (2020 dollars)",
+        model_min_add_4$coefficients[2], SE(model_min_add_4)[2]),
+  cbind("ADD/ADHD",          "All children (lagged wage)",
+        model_min_add_5$coefficients[2], SE(model_min_add_5)[2]),
+  
   # Behavioral problems
   cbind("Behavioral prob.", "All children (unadjusted)",
         model_min_beh_1$coefficients[2], SE(model_min_beh_1)[2]),
@@ -855,7 +895,7 @@ interaction_vals <- as.data.frame(rbind(
 colnames(interaction_vals) <- c("Outcome", "Sample", "effect", "se")
 
 # Reorder factor variables
-interaction_vals$Outcome <- factor(interaction_vals$Outcome, levels=c("Depression", "Anxiety", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
+interaction_vals$Outcome <- factor(interaction_vals$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
 interaction_vals$Sample <- factor(interaction_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Black or Hispanic/Latino", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)"))
 
 # Treat columns as numeric
@@ -879,9 +919,9 @@ plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=effect,
         strip.background = element_blank(),
         legend.title = element_blank(),
         panel.grid.major.x = element_blank(),
-        panel.grid.major.y = element_line(color="light gray", size=0.5),
-        panel.grid.minor.y = element_line(color="light gray", size=0.25)) +
-  geom_hline(yintercept=0, color="black", size=0.25) +
+        panel.grid.major.y = element_line(color="light gray", linewidth=0.5),
+        panel.grid.minor.y = element_line(color="light gray", linewidth=0.25)) +
+  geom_hline(yintercept=0, color="black", linewidth=0.25) +
   scale_y_continuous(limits = c(-0.025, 0.025),
                      breaks = c(-0.02, -0.01, 0, 0.01, 0.02),
                      minor_breaks = seq(-0.02, 0.02, 0.01),
