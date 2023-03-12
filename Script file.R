@@ -892,7 +892,7 @@ list <- cbind(
 min(list); max(list)
 
 # Extract coefficients of interest
-interaction_vals <- as.data.frame(rbind(
+main_vals <- as.data.frame(rbind(
   # Depression
   cbind("Depression",       "All children (unadjusted)",
         model_min_dep_1$coefficients[2], SE(model_min_dep_1)[2]),
@@ -1037,21 +1037,21 @@ interaction_vals <- as.data.frame(rbind(
   cbind("Missed school",    "All children (lagged wage)",
         model_min_sch_5$coefficients[2], SE(model_min_sch_5)[2])
 ))
-colnames(interaction_vals) <- c("Outcome", "Sample", "effect", "se")
+colnames(main_vals) <- c("Outcome", "Sample", "effect", "se")
 
 # Reorder factor variables
-interaction_vals$Outcome <- factor(interaction_vals$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
-interaction_vals$Sample <- factor(interaction_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Adults with high school or less", "Black or Hispanic/Latino", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)"))
+main_vals$Outcome <- factor(main_vals$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
+main_vals$Sample <- factor(main_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Adults with high school or less", "Black or Hispanic/Latino", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)"))
 
 # Treat columns as numeric
-interaction_vals$effect <- as.numeric(interaction_vals$effect)
-interaction_vals$se     <- as.numeric(interaction_vals$se)
+main_vals$effect <- as.numeric(main_vals$effect)
+main_vals$se     <- as.numeric(main_vals$se)
 
 # Generate coefficient plot
-plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=effect,
+plot_main <- ggplot(main_vals, aes(x=Outcome, y=effect,
                                          group=Sample, color=Sample)) +
   geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
-  scale_shape_manual(values = 1:nlevels(interaction_vals$Sample)) +
+  scale_shape_manual(values = 1:nlevels(main_vals$Sample)) +
   geom_errorbar(aes(ymin=effect-1.96*se, ymax=effect+1.96*se),
                 position = position_dodge(width=0.6), width=0.4) +
   ylab("Effect of $1 increase in minimum wage\non mental health outcomes") +
@@ -1067,14 +1067,14 @@ plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=effect,
         panel.grid.major.y = element_line(color="light gray", linewidth=0.5),
         panel.grid.minor.y = element_line(color="light gray", linewidth=0.25)) +
   geom_hline(yintercept=0, color="black", linewidth=0.25) +
-  scale_y_continuous(limits = c(-0.025, 0.025),
-                     breaks = c(-0.02, -0.01, 0, 0.01, 0.02),
-                     minor_breaks = seq(-0.02, 0.02, 0.01),
+  scale_y_continuous(limits = c(-0.05, 0.05),
+                     breaks = seq(-0.04, 0.04, 0.02),
+                     minor_breaks = seq(-0.05, 0.05, 0.01),
                      labels = function(x) paste0(x*100," pp")) +
   scale_color_grey(start=0, end=0.7)
 
 # Export figure
-ggsave(plot=plot_int, file="Coefficient plot, main.pdf", width=8, height=4, units='in', dpi=600)
+ggsave(plot=plot_main, file="Coefficient plot, main.pdf", width=8, height=4, units='in', dpi=600)
 
 ##############################################################################
 # Robustness check: Logistic regression
@@ -1153,7 +1153,7 @@ log_min_sch_2 <- svyglm(missed_school ~ Effective.Minimum.Wage +
                         design = design_sub, family="quasibinomial")
 
 # Extract coefficients of interest
-interaction_vals <- as.data.frame(rbind(
+logistic_vals <- as.data.frame(rbind(
   # Depression
   cbind("Depression",       "All children (unadjusted)",
         exp(coef(log_min_dep_1))[2],
@@ -1218,22 +1218,22 @@ interaction_vals <- as.data.frame(rbind(
         exp(coef(log_min_sch_2))[2],
         exp(confint(log_min_sch_2))[2,1], exp(confint(log_min_sch_2))[2,2])
 ))
-colnames(interaction_vals) <- c("Outcome", "Sample", "or", "conf_low", "conf_high")
+colnames(logistic_vals) <- c("Outcome", "Sample", "or", "conf_low", "conf_high")
 
 # Reorder factor variables
-interaction_vals$Outcome <- factor(interaction_vals$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
-interaction_vals$Sample <- factor(interaction_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Black or Hispanic/Latino", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)", "All children (lifetime wage, infl. adj.)"))
+logistic_vals$Outcome <- factor(logistic_vals$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
+logistic_vals$Sample <- factor(logistic_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Black or Hispanic/Latino", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)", "All children (lifetime wage, infl. adj.)"))
 
 # Treat columns as numeric
-interaction_vals$or        <- as.numeric(interaction_vals$or)
-interaction_vals$conf_low  <- as.numeric(interaction_vals$conf_low)
-interaction_vals$conf_high <- as.numeric(interaction_vals$conf_high)
+logistic_vals$or        <- as.numeric(logistic_vals$or)
+logistic_vals$conf_low  <- as.numeric(logistic_vals$conf_low)
+logistic_vals$conf_high <- as.numeric(logistic_vals$conf_high)
 
 # Generate coefficient plot
-plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=or,
+plot_int <- ggplot(logistic_vals, aes(x=Outcome, y=or,
                                          group=Sample, color=Sample)) +
   geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
-  scale_shape_manual(values = 1:nlevels(interaction_vals$Sample)) +
+  scale_shape_manual(values = 1:nlevels(logistic_vals$Sample)) +
   geom_errorbar(aes(ymin=conf_low, ymax=conf_high),
                 position = position_dodge(width=0.6), width=0.4) +
   ylab("Effect of $1 increase in minimum wage\non mental health outcomes (odds ratio)") +
@@ -1463,7 +1463,7 @@ life_min_sch_8 <- svyglm(missed_school ~ wage_life*adult_edu_cat +
                          design = design_sub)
 
 # Extract coefficients of interest
-interaction_vals <- as.data.frame(rbind(
+life_vals <- as.data.frame(rbind(
   # Depression
   cbind("Depression",       "All children (unadjusted)",
         life_min_dep_1$coefficients[2], SE(life_min_dep_1)[2]),
@@ -1576,21 +1576,21 @@ interaction_vals <- as.data.frame(rbind(
   cbind("Missed school",    "Adolescents, age 13-17",
         life_min_sch_6$coefficients[2], SE(life_min_sch_6)[2])
 ))
-colnames(interaction_vals) <- c("Outcome", "Sample", "effect", "se")
+colnames(life_vals) <- c("Outcome", "Sample", "effect", "se")
 
 # Reorder factor variables
-interaction_vals$Outcome <- factor(interaction_vals$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
-interaction_vals$Sample <- factor(interaction_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Adults with high school or less", "Black or Hispanic/Latino", "Adolescents, age 13-17"))
+life_vals$Outcome <- factor(life_vals$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
+life_vals$Sample <- factor(life_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Adults with high school or less", "Black or Hispanic/Latino", "Adolescents, age 13-17"))
 
 # Treat columns as numeric
-interaction_vals$effect <- as.numeric(interaction_vals$effect)
-interaction_vals$se     <- as.numeric(interaction_vals$se)
+life_vals$effect <- as.numeric(life_vals$effect)
+life_vals$se     <- as.numeric(life_vals$se)
 
 # Generate coefficient plot
-plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=effect,
+plot_life <- ggplot(life_vals, aes(x=Outcome, y=effect,
                                          group=Sample, color=Sample)) +
   geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
-  scale_shape_manual(values = 1:nlevels(interaction_vals$Sample)) +
+  scale_shape_manual(values = 1:nlevels(life_vals$Sample)) +
   geom_errorbar(aes(ymin=effect-1.96*se, ymax=effect+1.96*se),
                 position = position_dodge(width=0.6), width=0.4) +
   ylab("Effect of lifetime $1 increase in minimum\nwage on mental health outcomes") +
@@ -1613,4 +1613,4 @@ plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=effect,
   scale_color_grey(start=0, end=0.7)
 
 # Export figure
-ggsave(plot=plot_int, file="Coefficient plot, lifetime.pdf", width=8, height=4, units='in', dpi=600)
+ggsave(plot=plot_life, file="Coefficient plot, lifetime.pdf", width=8, height=4, units='in', dpi=600)
