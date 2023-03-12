@@ -113,6 +113,9 @@ merged <- merged %>% mutate(
     sc_age_years %in% c(0:17) ~ sc_age_years
   ))
 
+# Treat age as factor
+merged$age <- as.factor(merged$age)
+
 # Dichotomize age for interaction models
 merged <- merged %>% mutate(
   age_cat = case_when(
@@ -349,12 +352,12 @@ merged_demo <- merged %>%
 
 # Child characteristics: unweighted
 # This line provides demographic characteristics without survey weights.
-summary(tableby(~ age + sex + race_eth + adult_edu + fpl_category,
+summary(tableby(~ as.numeric(age) + sex + race_eth + adult_edu + fpl_category,
                 merged_demo, digits.pct=0), text=T)
 
 # Child characteristics: weighted
 # This line provides demographic characteristics with survey weights.
-summary(tableby(~ age + sex + race_eth + adult_edu + fpl_category,
+summary(tableby(~ as.numeric(age) + sex + race_eth + adult_edu + fpl_category,
                 merged_demo, digits.pct=0, weights=fwc/1946.27), text=T)
 
 ##############################################################################
@@ -1038,7 +1041,7 @@ colnames(interaction_vals) <- c("Outcome", "Sample", "effect", "se")
 
 # Reorder factor variables
 interaction_vals$Outcome <- factor(interaction_vals$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
-interaction_vals$Sample <- factor(interaction_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Black or Hispanic/Latino", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)", "All children (lifetime wage, infl. adj.)"))
+interaction_vals$Sample <- factor(interaction_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Adults with high school or less", "Black or Hispanic/Latino", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)"))
 
 # Treat columns as numeric
 interaction_vals$effect <- as.numeric(interaction_vals$effect)
@@ -1071,7 +1074,7 @@ plot_int <- ggplot(interaction_vals, aes(x=Outcome, y=effect,
   scale_color_grey(start=0, end=0.7)
 
 # Export figure
-ggsave(plot=plot_int, file="Coefficient plot.pdf", width=8, height=4, units='in', dpi=600)
+ggsave(plot=plot_int, file="Coefficient plot, main.pdf", width=8, height=4, units='in', dpi=600)
 
 ##############################################################################
 # Robustness check: Logistic regression
