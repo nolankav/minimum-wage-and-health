@@ -145,14 +145,13 @@ merged <- merged %>% mutate(
 merged$race_eth <- factor(merged$race_eth, levels = c("White, non-Hispanic/Latino", "Black, non-Hispanic/Latino", "Hispanic/Latino", "American Indian or Alaska Native", "Asian, Native Hawaiian, or Pacific Islander", "Other or mixed race"))
 
 # Dichotomoize race/ethnicity
-# White vs. non-white for interaction models
+# Black/Latino vs. other for interaction models
 merged <- merged %>% mutate(
   race_eth_cat = case_when(
-    sc_hispanic_r == 1    ~ "Black or Hispanic/Latino",
-    sc_race_r == 2        ~ "Black or Hispanic/Latino",
-    sc_race_r %in% c(1,3:7) ~ "Other races",
+    sc_hispanic_r == 1      ~ 0, # Black or Hispanic/Latino
+    sc_race_r == 2          ~ 0, # Black or Hispanic/Latino
+    sc_race_r %in% c(1,3:7) ~ 1  # Other races
   ))
-merged$race_eth_cat <- factor(merged$race_eth_cat, levels = c("Black or Hispanic/Latino", "Other races"))
 
 # Adults' highest educational attainment
 merged <- merged %>% mutate(
@@ -197,6 +196,13 @@ merged <- merged %>% mutate(
     fpl %in% c(200:999) | fpl_mean < 999 ~ "Higher-income"
   ))
 merged$low_income <- factor(merged$low_income, levels = c("Lower-income", "Higher-income"))
+
+# Child's employment
+merged <- merged %>% mutate(
+  child_job = case_when(
+    k7q38 == 1 ~ 1,
+    k7q38 == 2 ~ 0
+  ))
 
 # Family structure
 merged <- merged %>% mutate(
@@ -403,50 +409,50 @@ prop.table(svytable(~fpl_category + unmet_mental,  design=design_sub), 1)
 prop.table(svytable(~fpl_category + missed_school, design=design_sub), 1)
 
 # Explore adjusted associations
-model_fpl_dep <- svyglm(depression ~
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+model_fpl_dep <- svyglm(depression ~ fpl_category +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub)
 summary(model_fpl_dep)
 
-model_fpl_anx <- svyglm(anxiety ~
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+model_fpl_anx <- svyglm(anxiety ~ fpl_category +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub)
 summary(model_fpl_anx)
 
-model_fpl_add <- svyglm(adhd ~
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+model_fpl_add <- svyglm(adhd ~ fpl_category +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub)
 summary(model_fpl_add)
 
-model_fpl_beh <- svyglm(behavior ~
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+model_fpl_beh <- svyglm(behavior ~ fpl_category +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub)
 summary(model_fpl_beh)
 
-model_fpl_unm <- svyglm(unmet_needs ~
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+model_fpl_unm <- svyglm(unmet_needs ~ fpl_category +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub)
 summary(model_fpl_unm)
 
-model_fpl_men <- svyglm(unmet_mental ~
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+model_fpl_men <- svyglm(unmet_mental ~ fpl_category +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub)
 summary(model_fpl_men)
 
-model_fpl_dig <- svyglm(stomach_r ~
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+model_fpl_dig <- svyglm(stomach_r ~ fpl_category +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub)
 summary(model_fpl_dig)
 
-model_fpl_sch <- svyglm(missed_school ~
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+model_fpl_sch <- svyglm(missed_school ~ fpl_category +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub)
 summary(model_fpl_sch)
@@ -626,35 +632,35 @@ model_min_dep_1 <- svyglm(depression ~ Effective.Minimum.Wage +
                             year + fipsst,
                           design = design_sub)
 model_min_dep_2 <- svyglm(depression ~ Effective.Minimum.Wage +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dep_3 <- svyglm(depression ~ Effective.Minimum.Wage*low_income +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dep_4 <- svyglm(depression ~ Effective.Minimum.Wage.2020.Dollars +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dep_5 <- svyglm(depression ~ lag_by_1 +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dep_6 <- svyglm(depression ~ Effective.Minimum.Wage*age_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dep_7 <- svyglm(depression ~ Effective.Minimum.Wage*race_eth_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dep_8 <- svyglm(depression ~ Effective.Minimum.Wage*adult_edu_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dep_9 <- svyglm(depression ~ Effective.Minimum.Wage*nativity_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 
@@ -663,35 +669,35 @@ model_min_anx_1 <- svyglm(anxiety ~ Effective.Minimum.Wage +
                             year + fipsst,
                           design = design_sub)
 model_min_anx_2 <- svyglm(anxiety ~ Effective.Minimum.Wage +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_anx_3 <- svyglm(anxiety ~ Effective.Minimum.Wage*low_income +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_anx_4 <- svyglm(anxiety ~ Effective.Minimum.Wage.2020.Dollars +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_anx_5 <- svyglm(anxiety ~ lag_by_1 +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_anx_6 <- svyglm(anxiety ~ Effective.Minimum.Wage*age_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_anx_7 <- svyglm(anxiety ~ Effective.Minimum.Wage*race_eth_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_anx_8 <- svyglm(anxiety ~ Effective.Minimum.Wage*adult_edu_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_anx_9 <- svyglm(anxiety ~ Effective.Minimum.Wage*nativity_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 
@@ -700,35 +706,35 @@ model_min_add_1 <- svyglm(adhd ~ Effective.Minimum.Wage +
                             year + fipsst,
                           design = design_sub)
 model_min_add_2 <- svyglm(adhd ~ Effective.Minimum.Wage +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_add_3 <- svyglm(adhd ~ Effective.Minimum.Wage*low_income +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_add_4 <- svyglm(adhd ~ Effective.Minimum.Wage.2020.Dollars +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_add_5 <- svyglm(adhd ~ lag_by_1 +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_add_6 <- svyglm(adhd ~ Effective.Minimum.Wage*age_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_add_7 <- svyglm(adhd ~ Effective.Minimum.Wage*race_eth_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_add_8 <- svyglm(adhd ~ Effective.Minimum.Wage*adult_edu_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_add_9 <- svyglm(adhd ~ Effective.Minimum.Wage*nativity_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 
@@ -737,35 +743,35 @@ model_min_beh_1 <- svyglm(behavior ~ Effective.Minimum.Wage +
                             year + fipsst,
                           design = design_sub)
 model_min_beh_2 <- svyglm(behavior ~ Effective.Minimum.Wage +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_beh_3 <- svyglm(behavior ~ Effective.Minimum.Wage*low_income +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_beh_4 <- svyglm(behavior ~ Effective.Minimum.Wage.2020.Dollars +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_beh_5 <- svyglm(behavior ~ lag_by_1 +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_beh_6 <- svyglm(behavior ~ Effective.Minimum.Wage*age_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_beh_7 <- svyglm(behavior ~ Effective.Minimum.Wage*race_eth_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_beh_8 <- svyglm(behavior ~ Effective.Minimum.Wage*adult_edu_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_beh_9 <- svyglm(behavior ~ Effective.Minimum.Wage*nativity_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 
@@ -774,35 +780,35 @@ model_min_dig_1 <- svyglm(stomach_r ~ Effective.Minimum.Wage +
                             year + fipsst,
                           design = design_sub)
 model_min_dig_2 <- svyglm(stomach_r ~ Effective.Minimum.Wage +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dig_3 <- svyglm(stomach_r ~ Effective.Minimum.Wage*low_income +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dig_4 <- svyglm(stomach_r ~ Effective.Minimum.Wage.2020.Dollars +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dig_5 <- svyglm(stomach_r ~ lag_by_1 +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dig_6 <- svyglm(stomach_r ~ Effective.Minimum.Wage*age_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dig_7 <- svyglm(stomach_r ~ Effective.Minimum.Wage*race_eth_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dig_8 <- svyglm(stomach_r ~ Effective.Minimum.Wage*adult_edu_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_dig_9 <- svyglm(stomach_r ~ Effective.Minimum.Wage*nativity_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 
@@ -811,35 +817,35 @@ model_min_unm_1 <- svyglm(unmet_needs ~ Effective.Minimum.Wage +
                             year + fipsst,
                           design = design_sub)
 model_min_unm_2 <- svyglm(unmet_needs ~ Effective.Minimum.Wage +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_unm_3 <- svyglm(unmet_needs ~ Effective.Minimum.Wage*low_income +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_unm_4 <- svyglm(unmet_needs ~ Effective.Minimum.Wage.2020.Dollars +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_unm_5 <- svyglm(unmet_needs ~ lag_by_1 +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_unm_6 <- svyglm(unmet_needs ~ Effective.Minimum.Wage*age_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_unm_7 <- svyglm(unmet_needs ~ Effective.Minimum.Wage*race_eth_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_unm_8 <- svyglm(unmet_needs ~ Effective.Minimum.Wage*adult_edu_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_unm_9 <- svyglm(unmet_needs ~ Effective.Minimum.Wage*nativity_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 
@@ -848,35 +854,35 @@ model_min_men_1 <- svyglm(unmet_mental ~ Effective.Minimum.Wage +
                             year + fipsst,
                           design = design_sub)
 model_min_men_2 <- svyglm(unmet_mental ~ Effective.Minimum.Wage +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_men_3 <- svyglm(unmet_mental ~ Effective.Minimum.Wage*low_income +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_men_4 <- svyglm(unmet_mental ~ Effective.Minimum.Wage.2020.Dollars +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_men_5 <- svyglm(unmet_mental ~ lag_by_1 +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_men_6 <- svyglm(unmet_mental ~ Effective.Minimum.Wage*age_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_men_7 <- svyglm(unmet_mental ~ Effective.Minimum.Wage*race_eth_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_men_8 <- svyglm(unmet_mental ~ Effective.Minimum.Wage*adult_edu_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_men_9 <- svyglm(unmet_mental ~ Effective.Minimum.Wage*nativity_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 
@@ -885,35 +891,72 @@ model_min_sch_1 <- svyglm(missed_school ~ Effective.Minimum.Wage +
                             year + fipsst,
                           design = design_sub)
 model_min_sch_2 <- svyglm(missed_school ~ Effective.Minimum.Wage +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_sch_3 <- svyglm(missed_school ~ Effective.Minimum.Wage*low_income +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_sch_4 <- svyglm(missed_school ~ Effective.Minimum.Wage.2020.Dollars +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_sch_5 <- svyglm(missed_school ~ lag_by_1 +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_sch_6 <- svyglm(missed_school ~ Effective.Minimum.Wage*age_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_sch_7 <- svyglm(missed_school ~ Effective.Minimum.Wage*race_eth_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_sch_8 <- svyglm(missed_school ~ Effective.Minimum.Wage*adult_edu_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 model_min_sch_9 <- svyglm(missed_school ~ Effective.Minimum.Wage*nativity_cat +
-                            age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
+                            year + fipsst,
+                          design = design_sub)
+
+# Models for child employment
+model_min_job_1 <- svyglm(child_job ~ Effective.Minimum.Wage +
+                            year + fipsst,
+                          design = design_sub)
+model_min_job_2 <- svyglm(child_job ~ Effective.Minimum.Wage +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
+                            year + fipsst,
+                          design = design_sub)
+model_min_job_3 <- svyglm(child_job ~ Effective.Minimum.Wage*low_income +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
+                            year + fipsst,
+                          design = design_sub)
+model_min_job_4 <- svyglm(child_job ~ Effective.Minimum.Wage.2020.Dollars +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
+                            year + fipsst,
+                          design = design_sub)
+model_min_job_5 <- svyglm(child_job ~ lag_by_1 +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
+                            year + fipsst,
+                          design = design_sub)
+model_min_job_6 <- svyglm(child_job ~ Effective.Minimum.Wage*age_cat +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
+                            year + fipsst,
+                          design = design_sub)
+model_min_job_7 <- svyglm(child_job ~ Effective.Minimum.Wage*race_eth_cat +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
+                            year + fipsst,
+                          design = design_sub)
+model_min_job_8 <- svyglm(child_job ~ Effective.Minimum.Wage*adult_edu_cat +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
+                            year + fipsst,
+                          design = design_sub)
+model_min_job_9 <- svyglm(child_job ~ Effective.Minimum.Wage*nativity_cat +
+                            age + sex + race_eth + family_struc + adult_edu + nativity +
                             year + fipsst,
                           design = design_sub)
 
@@ -972,7 +1015,7 @@ main_vals <- as.data.frame(rbind(
         model_min_dep_4$coefficients[2], SE(model_min_dep_4)[2]),
   cbind("Depression",       "All children (lagged wage)",
         model_min_dep_5$coefficients[2], SE(model_min_dep_5)[2]),
-  
+
   # Anxiety
   cbind("Anxiety",          "All children (unadjusted)",
         model_min_anx_1$coefficients[2], SE(model_min_anx_1)[2]),
@@ -992,7 +1035,7 @@ main_vals <- as.data.frame(rbind(
         model_min_anx_4$coefficients[2], SE(model_min_anx_4)[2]),
   cbind("Anxiety",          "All children (lagged wage)",
         model_min_anx_5$coefficients[2], SE(model_min_anx_5)[2]),
-  
+
   # ADD/ADHD
   cbind("ADD/ADHD",          "All children (unadjusted)",
         model_min_add_1$coefficients[2], SE(model_min_add_1)[2]),
@@ -1012,7 +1055,7 @@ main_vals <- as.data.frame(rbind(
         model_min_add_4$coefficients[2], SE(model_min_add_4)[2]),
   cbind("ADD/ADHD",          "All children (lagged wage)",
         model_min_add_5$coefficients[2], SE(model_min_add_5)[2]),
-  
+
   # Behavioral problems
   cbind("Behavioral prob.", "All children (unadjusted)",
         model_min_beh_1$coefficients[2], SE(model_min_beh_1)[2]),
@@ -1032,7 +1075,7 @@ main_vals <- as.data.frame(rbind(
         model_min_beh_4$coefficients[2], SE(model_min_beh_4)[2]),
   cbind("Behavioral prob.", "All children (lagged wage)",
         model_min_beh_5$coefficients[2], SE(model_min_beh_5)[2]),
-  
+
   # Digestive issues
   cbind("Digestive issues", "All children (unadjusted)",
         model_min_dig_1$coefficients[2], SE(model_min_dig_1)[2]),
@@ -1052,7 +1095,7 @@ main_vals <- as.data.frame(rbind(
         model_min_dig_4$coefficients[2], SE(model_min_dig_4)[2]),
   cbind("Digestive issues", "All children (lagged wage)",
         model_min_dig_5$coefficients[2], SE(model_min_dig_5)[2]),
-  
+
   # Unmet health care needs (any)
   cbind("Unmet health care\n(of any kind)", "All children (unadjusted)",
         model_min_unm_1$coefficients[2], SE(model_min_unm_1)[2]),
@@ -1072,7 +1115,7 @@ main_vals <- as.data.frame(rbind(
         model_min_unm_4$coefficients[2], SE(model_min_unm_4)[2]),
   cbind("Unmet health care\n(of any kind)", "All children (lagged wage)",
         model_min_unm_5$coefficients[2], SE(model_min_unm_5)[2]),
-  
+
   # Unmet mental health care
   cbind("Unmet health care\n(mental health)", "All children (unadjusted)",
         model_min_men_1$coefficients[2], SE(model_min_men_1)[2]),
@@ -1092,7 +1135,7 @@ main_vals <- as.data.frame(rbind(
         model_min_men_4$coefficients[2], SE(model_min_men_4)[2]),
   cbind("Unmet health care\n(mental health)", "All children (lagged wage)",
         model_min_men_5$coefficients[2], SE(model_min_men_5)[2]),
-  
+
   # Missed 1+ week of school
   cbind("Missed school",    "All children (unadjusted)",
         model_min_sch_1$coefficients[2], SE(model_min_sch_1)[2]),
@@ -1111,12 +1154,32 @@ main_vals <- as.data.frame(rbind(
   cbind("Missed school",    "All children (2020 dollars)",
         model_min_sch_4$coefficients[2], SE(model_min_sch_4)[2]),
   cbind("Missed school",    "All children (lagged wage)",
-        model_min_sch_5$coefficients[2], SE(model_min_sch_5)[2])
+        model_min_sch_5$coefficients[2], SE(model_min_sch_5)[2]),
+  
+  # Child employment
+  cbind("Child employed",    "All children (unadjusted)",
+        model_min_job_1$coefficients[2], SE(model_min_job_1)[2]),
+  cbind("Child employed",    "All children (adjusted)",
+        model_min_job_2$coefficients[2], SE(model_min_job_2)[2]),
+  cbind("Child employed",    "Less than 200% FPL",
+        model_min_job_3$coefficients[2], SE(model_min_job_3)[2]),
+  cbind("Child employed",    "Adults with high school or less",
+        model_min_job_8$coefficients[2], SE(model_min_job_8)[2]),
+  cbind("Child employed",    "Black or Hispanic/Latino",
+        model_min_job_7$coefficients[2], SE(model_min_job_7)[2]),
+  cbind("Child employed",    "First- or second-generation",
+        model_min_job_9$coefficients[2], SE(model_min_job_9)[2]),
+  cbind("Child employed",    "Adolescents, age 13-17",
+        model_min_job_6$coefficients[2], SE(model_min_job_6)[2]),
+  cbind("Child employed",    "All children (2020 dollars)",
+        model_min_job_4$coefficients[2], SE(model_min_job_4)[2]),
+  cbind("Child employed",    "All children (lagged wage)",
+        model_min_job_5$coefficients[2], SE(model_min_job_5)[2])
 ))
 colnames(main_vals) <- c("Outcome", "Sample", "effect", "se")
 
 # Reorder factor variables
-main_vals$Outcome <- factor(main_vals$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
+main_vals$Outcome <- factor(main_vals$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school", "Child employed"))
 main_vals$Sample <- factor(main_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Less than 200% FPL", "Adults with high school or less", "Black or Hispanic/Latino", "First- or second-generation", "Adolescents, age 13-17", "All children (2020 dollars)", "All children (lagged wage)"))
 
 # Treat columns as numeric
@@ -1161,7 +1224,7 @@ log_min_dep_1 <- svyglm(depression ~ Effective.Minimum.Wage +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 log_min_dep_2 <- svyglm(depression ~ Effective.Minimum.Wage +
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 
@@ -1170,7 +1233,7 @@ log_min_anx_1 <- svyglm(anxiety ~ Effective.Minimum.Wage +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 log_min_anx_2 <- svyglm(anxiety ~ Effective.Minimum.Wage +
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 
@@ -1179,7 +1242,7 @@ log_min_add_1 <- svyglm(adhd ~ Effective.Minimum.Wage +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 log_min_add_2 <- svyglm(adhd ~ Effective.Minimum.Wage +
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 
@@ -1188,7 +1251,7 @@ log_min_beh_1 <- svyglm(behavior ~ Effective.Minimum.Wage +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 log_min_beh_2 <- svyglm(behavior ~ Effective.Minimum.Wage +
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 
@@ -1197,7 +1260,7 @@ log_min_dig_1 <- svyglm(stomach_r ~ Effective.Minimum.Wage +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 log_min_dig_2 <- svyglm(stomach_r ~ Effective.Minimum.Wage +
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 
@@ -1206,7 +1269,7 @@ log_min_unm_1 <- svyglm(unmet_needs ~ Effective.Minimum.Wage +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 log_min_unm_2 <- svyglm(unmet_needs ~ Effective.Minimum.Wage +
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 
@@ -1215,7 +1278,7 @@ log_min_men_1 <- svyglm(unmet_mental ~ Effective.Minimum.Wage +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 log_min_men_2 <- svyglm(unmet_mental ~ Effective.Minimum.Wage +
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 
@@ -1224,7 +1287,7 @@ log_min_sch_1 <- svyglm(missed_school ~ Effective.Minimum.Wage +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 log_min_sch_2 <- svyglm(missed_school ~ Effective.Minimum.Wage +
-                          age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
                           year + fipsst,
                         design = design_sub, family="quasibinomial")
 
@@ -1343,27 +1406,27 @@ life_min_dep_1 <- svyglm(depression ~ wage_life +
                            age + year + fipsst,
                          design = design_sub)
 life_min_dep_2 <- svyglm(depression ~ wage_life +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_dep_3 <- svyglm(depression ~ wage_life*low_income +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_dep_6 <- svyglm(depression ~ wage_life*age_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_dep_7 <- svyglm(depression ~ wage_life*race_eth_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_dep_8 <- svyglm(depression ~ wage_life*adult_edu_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_dep_9 <- svyglm(depression ~ wage_life*nativity_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 
@@ -1372,27 +1435,27 @@ life_min_anx_1 <- svyglm(anxiety ~ wage_life +
                            age + year + fipsst,
                          design = design_sub)
 life_min_anx_2 <- svyglm(anxiety ~ wage_life +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_anx_3 <- svyglm(anxiety ~ wage_life*low_income +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_anx_6 <- svyglm(anxiety ~ wage_life*age_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_anx_7 <- svyglm(anxiety ~ wage_life*race_eth_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_anx_8 <- svyglm(anxiety ~ wage_life*adult_edu_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_anx_9 <- svyglm(anxiety ~ wage_life*nativity_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 
@@ -1401,27 +1464,27 @@ life_min_add_1 <- svyglm(adhd ~ wage_life +
                            age + year + fipsst,
                          design = design_sub)
 life_min_add_2 <- svyglm(adhd ~ wage_life +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_add_3 <- svyglm(adhd ~ wage_life*low_income +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_add_6 <- svyglm(adhd ~ wage_life*age_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_add_7 <- svyglm(adhd ~ wage_life*race_eth_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_add_8 <- svyglm(adhd ~ wage_life*adult_edu_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_add_9 <- svyglm(adhd ~ wage_life*nativity_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 
@@ -1430,27 +1493,27 @@ life_min_beh_1 <- svyglm(behavior ~ wage_life +
                            age + year + fipsst,
                          design = design_sub)
 life_min_beh_2 <- svyglm(behavior ~ wage_life +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_beh_3 <- svyglm(behavior ~ wage_life*low_income +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_beh_6 <- svyglm(behavior ~ wage_life*age_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_beh_7 <- svyglm(behavior ~ wage_life*race_eth_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_beh_8 <- svyglm(behavior ~ wage_life*adult_edu_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_beh_9 <- svyglm(behavior ~ wage_life*nativity_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 
@@ -1459,27 +1522,27 @@ life_min_dig_1 <- svyglm(stomach_r ~ wage_life +
                            age + year + fipsst,
                          design = design_sub)
 life_min_dig_2 <- svyglm(stomach_r ~ wage_life +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_dig_3 <- svyglm(stomach_r ~ wage_life*low_income +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_dig_6 <- svyglm(stomach_r ~ wage_life*age_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_dig_7 <- svyglm(stomach_r ~ wage_life*race_eth_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_dig_8 <- svyglm(stomach_r ~ wage_life*adult_edu_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_dig_9 <- svyglm(stomach_r ~ wage_life*nativity_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 
@@ -1488,27 +1551,27 @@ life_min_unm_1 <- svyglm(unmet_needs ~ wage_life +
                            age + year + fipsst,
                          design = design_sub)
 life_min_unm_2 <- svyglm(unmet_needs ~ wage_life +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_unm_3 <- svyglm(unmet_needs ~ wage_life*low_income +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_unm_6 <- svyglm(unmet_needs ~ wage_life*age_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_unm_7 <- svyglm(unmet_needs ~ wage_life*race_eth_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_unm_8 <- svyglm(unmet_needs ~ wage_life*adult_edu_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_unm_9 <- svyglm(unmet_needs ~ wage_life*nativity_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 
@@ -1517,27 +1580,27 @@ life_min_men_1 <- svyglm(unmet_mental ~ wage_life +
                            age + year + fipsst,
                          design = design_sub)
 life_min_men_2 <- svyglm(unmet_mental ~ wage_life +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_men_3 <- svyglm(unmet_mental ~ wage_life*low_income +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_men_6 <- svyglm(unmet_mental ~ wage_life*age_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_men_7 <- svyglm(unmet_mental ~ wage_life*race_eth_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_men_8 <- svyglm(unmet_mental ~ wage_life*adult_edu_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_men_9 <- svyglm(unmet_mental ~ wage_life*nativity_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 
@@ -1546,27 +1609,27 @@ life_min_sch_1 <- svyglm(missed_school ~ wage_life +
                            age + year + fipsst,
                          design = design_sub)
 life_min_sch_2 <- svyglm(missed_school ~ wage_life +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_sch_3 <- svyglm(missed_school ~ wage_life*low_income +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_sch_6 <- svyglm(missed_school ~ wage_life*age_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_sch_7 <- svyglm(missed_school ~ wage_life*race_eth_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_sch_8 <- svyglm(missed_school ~ wage_life*adult_edu_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 life_min_sch_9 <- svyglm(missed_school ~ wage_life*nativity_cat +
-                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
+                           age + sex + race_eth + family_struc + adult_edu + nativity +
                            year + fipsst,
                          design = design_sub)
 
