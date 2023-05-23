@@ -29,7 +29,7 @@ library(cdlTools)     # FIPS tools
 # Dataset preparation
 ##############################################################################
 
-# Read NSCH datasets into R
+# Read YRBS datasets into R
 yrbs_st_am <- read.dta13("YRBS data/sadc_2019_state_a_m.dta")
 yrbs_st_nz <- read.dta13("YRBS data/sadc_2019_state_n_z.dta")
 
@@ -729,81 +729,82 @@ min(list); max(list)
 # Extract coefficients of interest
 main_vals <- as.data.frame(rbind(
   # Sad or hopeless
-  cbind("Sad or hopeless", "All children (unadjusted)",
+  cbind("Sad or hopeless", "Symptoms", "All children (unadjusted)",
         model_min_sad_1$coefficients[1], model_min_sad_1$cse[1]),
-  cbind("Sad or hopeless", "All children (adjusted)",
+  cbind("Sad or hopeless", "Symptoms", "All children (adjusted)",
         model_min_sad_2$coefficients[1], model_min_sad_2$cse[1]),
-  cbind("Sad or hopeless", "Black or Hispanic/Latino",
+  cbind("Sad or hopeless", "Symptoms", "Black or Hispanic/Latino",
         model_min_sad_7$coefficients[1], model_min_sad_7$cse[1]),
-  cbind("Sad or hopeless", "All children (2020 dollars)",
+  cbind("Sad or hopeless", "Symptoms", "All children (2020 dollars)",
         model_min_sad_4$coefficients[1], model_min_sad_4$cse[1]),
-  cbind("Sad or hopeless", "All children (lagged wage)",
+  cbind("Sad or hopeless", "Symptoms", "All children (lagged wage)",
         model_min_sad_5$coefficients[1], model_min_sad_5$cse[1]),
   
   # Considered suicide
-  cbind("Considered suicide", "All children (unadjusted)",
+  cbind("Considered suicide", "Symptoms", "All children (unadjusted)",
         model_min_con_1$coefficients[1], model_min_con_1$cse[1]),
-  cbind("Considered suicide", "All children (adjusted)",
+  cbind("Considered suicide", "Symptoms", "All children (adjusted)",
         model_min_con_2$coefficients[1], model_min_con_2$cse[1]),
-  cbind("Considered suicide", "Black or Hispanic/Latino",
+  cbind("Considered suicide", "Symptoms", "Black or Hispanic/Latino",
         model_min_con_7$coefficients[1], model_min_con_7$cse[1]),
-  cbind("Considered suicide", "All children (2020 dollars)",
+  cbind("Considered suicide", "Symptoms", "All children (2020 dollars)",
         model_min_con_4$coefficients[1], model_min_con_4$cse[1]),
-  cbind("Considered suicide", "All children (lagged wage)",
+  cbind("Considered suicide", "Symptoms", "All children (lagged wage)",
         model_min_con_5$coefficients[1], model_min_con_5$cse[1]),
   
   # Attempted suicide
-  cbind("Attempted suicide", "All children (unadjusted)",
+  cbind("Attempted suicide", "Symptoms", "All children (unadjusted)",
         model_min_att_1$coefficients[1], model_min_att_1$cse[1]),
-  cbind("Attempted suicide", "All children (adjusted)",
+  cbind("Attempted suicide", "Symptoms", "All children (adjusted)",
         model_min_att_2$coefficients[1], model_min_att_2$cse[1]),
-  cbind("Attempted suicide", "Black or Hispanic/Latino",
+  cbind("Attempted suicide", "Symptoms", "Black or Hispanic/Latino",
         model_min_att_7$coefficients[1], model_min_att_7$cse[1]),
-  cbind("Attempted suicide", "All children (2020 dollars)",
+  cbind("Attempted suicide", "Symptoms", "All children (2020 dollars)",
         model_min_att_4$coefficients[1], model_min_att_4$cse[1]),
-  cbind("Attempted suicide", "All children (lagged wage)",
+  cbind("Attempted suicide", "Symptoms", "All children (lagged wage)",
         model_min_att_5$coefficients[1], model_min_att_5$cse[1]),
   
   # Physical fight
-  cbind("Physical fight", "All children (unadjusted)",
+  cbind("Physical fight", "Life", "All children (unadjusted)",
         model_min_fgh_1$coefficients[1], model_min_fgh_1$cse[1]),
-  cbind("Physical fight", "All children (adjusted)",
+  cbind("Physical fight", "Life", "All children (adjusted)",
         model_min_fgh_2$coefficients[1], model_min_fgh_2$cse[1]),
-  cbind("Physical fight", "Black or Hispanic/Latino",
+  cbind("Physical fight", "Life", "Black or Hispanic/Latino",
         model_min_fgh_7$coefficients[1], model_min_fgh_7$cse[1]),
-  cbind("Physical fight", "All children (2020 dollars)",
+  cbind("Physical fight", "Life", "All children (2020 dollars)",
         model_min_fgh_4$coefficients[1], model_min_fgh_4$cse[1]),
-  cbind("Physical fight", "All children (lagged wage)",
+  cbind("Physical fight", "Life", "All children (lagged wage)",
         model_min_fgh_5$coefficients[1], model_min_fgh_5$cse[1]),
   
   # Recent alcohol use
-  cbind("Recent alcohol", "All children (unadjusted)",
+  cbind("Recent alcohol", "Life", "All children (unadjusted)",
         model_min_alc_1$coefficients[1], model_min_alc_1$cse[1]),
-  cbind("Recent alcohol", "All children (adjusted)",
+  cbind("Recent alcohol", "Life", "All children (adjusted)",
         model_min_alc_2$coefficients[1], model_min_alc_2$cse[1]),
-  cbind("Recent alcohol", "Black or Hispanic/Latino",
+  cbind("Recent alcohol", "Life", "Black or Hispanic/Latino",
         model_min_alc_7$coefficients[1], model_min_alc_7$cse[1]),
-  cbind("Recent alcohol", "All children (2020 dollars)",
+  cbind("Recent alcohol", "Life", "All children (2020 dollars)",
         model_min_alc_4$coefficients[1], model_min_alc_4$cse[1]),
-  cbind("Recent alcohol", "All children (lagged wage)",
+  cbind("Recent alcohol", "Life", "All children (lagged wage)",
         model_min_alc_5$coefficients[1], model_min_alc_5$cse[1]),
   
   # Recent marijuana use
-  cbind("Recent marijuana", "All children (unadjusted)",
+  cbind("Recent marijuana", "Life", "All children (unadjusted)",
         model_min_mjn_1$coefficients[1], model_min_mjn_1$cse[1]),
-  cbind("Recent marijuana", "All children (adjusted)",
+  cbind("Recent marijuana", "Life", "All children (adjusted)",
         model_min_mjn_2$coefficients[1], model_min_mjn_2$cse[1]),
-  cbind("Recent marijuana", "Black or Hispanic/Latino",
+  cbind("Recent marijuana", "Life", "Black or Hispanic/Latino",
         model_min_mjn_7$coefficients[1], model_min_mjn_7$cse[1]),
-  cbind("Recent marijuana", "All children (2020 dollars)",
+  cbind("Recent marijuana", "Life", "All children (2020 dollars)",
         model_min_mjn_4$coefficients[1], model_min_mjn_4$cse[1]),
-  cbind("Recent marijuana", "All children (lagged wage)",
+  cbind("Recent marijuana", "Life", "All children (lagged wage)",
         model_min_mjn_5$coefficients[1], model_min_mjn_5$cse[1])
 ))
-colnames(main_vals) <- c("Outcome", "Sample", "effect", "se")
+colnames(main_vals) <- c("Outcome", "Category", "Sample", "effect", "se")
 
 # Reorder factor variables
 main_vals$Outcome <- factor(main_vals$Outcome, levels=c("Sad or hopeless", "Considered suicide", "Attempted suicide", "Physical fight", "Recent alcohol", "Recent marijuana"))
+main_vals$Category <- factor(main_vals$Category, levels=c("Diagnoses", "Symptoms", "Health care", "Life"))
 main_vals$Sample <- factor(main_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Black or Hispanic/Latino", "All children (2020 dollars)", "All children (lagged wage)"))
 
 # Treat columns as numeric
@@ -811,8 +812,9 @@ main_vals$effect <- as.numeric(main_vals$effect)
 main_vals$se     <- as.numeric(main_vals$se)
 
 # Generate coefficient plot
-plot_main <- ggplot(main_vals, aes(x=Outcome, y=effect,
-                                         group=Sample, color=Sample)) +
+plot_main <- ggplot(subset(main_vals, Sample %in% c("All children (unadjusted)",
+                                                    "All children (adjusted)")),
+                    aes(x=Outcome, y=effect, group=Sample, color=Sample)) +
   geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
   scale_shape_manual(values = 1:nlevels(main_vals$Sample)) +
   geom_errorbar(aes(ymin=effect-1.96*se, ymax=effect+1.96*se),
@@ -834,11 +836,12 @@ plot_main <- ggplot(main_vals, aes(x=Outcome, y=effect,
                      breaks = seq(-0.04, 0.04, 0.02),
                      minor_breaks = seq(-0.05, 0.05, 0.01),
                      labels = function(x) paste0(x*100," pp")) +
-  scale_color_grey(start=0, end=0.7) +
-  ggtitle("Adolescents (12-18), 2001-2019")
+  scale_color_grey(start=0.7, end=0) +
+  ggtitle("Adolescents (12-18), 2001-2019") +
+  facet_grid(~Category, scales="free", space="free_x")
 
 # Export figure
-ggsave(plot=plot_main, file="YRBS coefficient plot, main.pdf", width=6, height=4, units='in', dpi=600)
+ggsave(plot=plot_main, file="YRBS coefficient plot, main.pdf", width=4.75, height=4, units='in', dpi=600)
 
 ##############################################################################
 # Effect of lifetime minimum wage on mental health outcomes
