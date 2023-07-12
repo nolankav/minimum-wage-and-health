@@ -1,6 +1,7 @@
-# Minimum wage and children's health
-# N.M. Kavanagh, N. Slopen
-# March 31, 2023
+# Minimum wage and children's mental health
+# Analyses using the Youth Risk Behavior Surveillance System
+# N.M. Kavanagh, M. McConnell, N. Slopen
+# June 27, 2023
 
 # Please direct questions about this script file to nolankavanagh@fas.harvard.edu.
 
@@ -47,7 +48,7 @@ yrbs_st_am$fipsst <- cdlTools::fips(yrbs_st_am$sitecode_2, to="FIPS")
 yrbs_st_nz$fipsst <- cdlTools::fips(yrbs_st_nz$sitecode,   to="FIPS")
 
 # Bind all states together
-yrbs_all <- bind_rows(yrbs_st_am, yrbs_st_nz)
+yrbs <- bind_rows(yrbs_st_am, yrbs_st_nz)
 
 # Read minimum wage dataset into R
 min_wage_df <- read.csv("https://raw.githubusercontent.com/Lislejoem/Minimum-Wage-by-State-1968-to-2020/master/Minimum%20Wage%20Data.csv")
@@ -61,6 +62,13 @@ min_wage_df$year <- min_wage_df$Year
 
 # Reorder dataset
 min_wage_df <- min_wage_df %>% arrange(fipsst, year)
+
+# Generate indicator for above federal minimum
+min_wage_df <- min_wage_df %>% mutate(
+  above_fed = case_when(
+    State.Minimum.Wage > Federal.Minimum.Wage ~ 1,
+    TRUE ~ 0
+  ))
 
 # Generate lagged minimum wages
 min_wage_df <- min_wage_df %>%
@@ -90,22 +98,86 @@ min_wage_df <- min_wage_df %>%
     lag_by_18_inf = lag(Effective.Minimum.Wage.2020.Dollars, n=18, default=NA)
     )
 
-# Merge minimum wage and NSCH data
-merged <- left_join(yrbs_all, min_wage_df, by=c("fipsst", "year"))
+# Merge minimum wage and YRBS data
+yrbs_all <- left_join(yrbs, min_wage_df, by=c("fipsst", "year"))
 
 # Clear old datasets from R
 rm(yrbs_st_am, yrbs_st_nz)
+
+##############################################################################
+# Supplemental Medicaid dataset preparation
+##############################################################################
+
+# Read Medicaid datasets into R
+medicaid_1_5_df  <- read.csv("Supplemental data/medicaid_1_5_state_year.csv")
+medicaid_6_18_df <- read.csv("Supplemental data/medicaid_6_18_state_year.csv")
+
+# Add columns for 2001 and 2007
+# Duplicate data from 2000 and 2006
+medicaid_1_5_df$X2001  <- medicaid_1_5_df$X2000
+medicaid_1_5_df$X2007  <- medicaid_1_5_df$X2006
+medicaid_6_18_df$X2001 <- medicaid_6_18_df$X2000
+medicaid_6_18_df$X2007 <- medicaid_6_18_df$X2006
+
+# Restructure data to long format
+library(reshape2)
+medicaid_1_5_df  <- melt(medicaid_1_5_df, id.vars = c("X"),
+                         variable.name = "year", value.name = "elig_1_5")
+medicaid_6_18_df <- melt(medicaid_6_18_df, id.vars = c("X"),
+                         variable.name = "year", value.name = "elig_6_18")
+
+# Clean year variable
+# Drop leading "X" in strings
+medicaid_1_5_df$year  <- substring(medicaid_1_5_df$year,  2)
+medicaid_6_18_df$year <- substring(medicaid_6_18_df$year, 2)
+
+# Rename columns
+colnames(medicaid_1_5_df)  <- c("state", "year", "elig_1_5")
+colnames(medicaid_6_18_df) <- c("state", "year", "elig_6_18")
+
+# Convert names to FIPS
+# Necessary for smooth merge
+medicaid_1_5_df$fipsst  <- cdlTools::fips(medicaid_1_5_df$state,  to="FIPS")
+medicaid_6_18_df$fipsst <- cdlTools::fips(medicaid_6_18_df$state, to="FIPS")
+
+# Treat year as numeric
+medicaid_1_5_df$year  <- as.numeric(medicaid_1_5_df$year)
+medicaid_6_18_df$year <- as.numeric(medicaid_6_18_df$year)
+
+# Merge Medicaid and YRBS data
+yrbs_all <- left_join(yrbs_all, medicaid_1_5_df,  by=c("fipsst", "year"))
+yrbs_all <- left_join(yrbs_all, medicaid_6_18_df, by=c("fipsst", "year"))
+
+##############################################################################
+# Supplemental EITC dataset preparation
+##############################################################################
+
+# Read EITC dataset into R
+eitc <- read.csv("Supplemental data/eitc_state_year.csv")
+
+# Merge EITC and YRBS data
+yrbs_all <- left_join(yrbs_all, eitc, by=c("fipsst", "year"))
+
+##############################################################################
+# Supplemental TANF dataset preparation
+##############################################################################
+
+# Read TANF dataset into R
+tanf <- read.csv("Supplemental data/tanf_state_year.csv")
+
+# Merge TANF and YRBS data
+yrbs_all <- left_join(yrbs_all, tanf, by=c("fipsst", "year"))
 
 ##############################################################################
 # Variable preparation
 ##############################################################################
 
 # Treat fixed effects as factors
-merged$year   <- as.factor(merged$year)
-merged$fipsst <- as.factor(merged$fipsst)
+yrbs_all$year   <- as.factor(yrbs_all$year)
+yrbs_all$fipsst <- as.factor(yrbs_all$fipsst)
 
 # Child's age
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   age_2 = case_when(
     age == 1 ~ "12 years old or younger",
     age == 2 ~ "13 years old",
@@ -117,15 +189,15 @@ merged <- merged %>% mutate(
   ))
 
 # Child's sex
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   sex_2 = case_when(
     sex == 1 ~ "Female",
     sex == 2 ~ "Male"
   ))
-merged$sex_2 <- factor(merged$sex_2, levels = c("Male", "Female"))
+yrbs_all$sex_2 <- factor(yrbs_all$sex_2, levels = c("Male", "Female"))
 
 # Child's race/ethnicity
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   race_eth_2 = case_when(
     race7 == 1        ~ "American Indian or Alaska Native",
     race7 %in% c(2,5) ~ "Asian, Native Hawaiian, or Pacific Islander",
@@ -134,77 +206,70 @@ merged <- merged %>% mutate(
     race7 == 6        ~ "White, non-Hispanic/Latino",
     race7 == 7        ~ "Other or mixed race"
   ))
-merged$race_eth_2 <- factor(merged$race_eth_2, levels = c("White, non-Hispanic/Latino", "Black, non-Hispanic/Latino", "Hispanic/Latino", "American Indian or Alaska Native", "Asian, Native Hawaiian, or Pacific Islander", "Other or mixed race"))
+yrbs_all$race_eth_2 <- factor(yrbs_all$race_eth_2, levels = c("White, non-Hispanic/Latino", "Black, non-Hispanic/Latino", "Hispanic/Latino", "American Indian or Alaska Native", "Asian, Native Hawaiian, or Pacific Islander", "Other or mixed race"))
 
 # Dichotomoize race/ethnicity
 # Black/Latino vs. other for interaction models
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   race_eth_cat = case_when(
     race7 %in% c(3:4)     ~ 0, # Black or Hispanic/Latino
     race7 %in% c(1:2,5:7) ~ 1  # Other races
   ))
 
 # Child's educational grade
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   grade_2 = case_when(
     grade == 1 ~ "9th grade",
     grade == 2 ~ "10th grade",
     grade == 3 ~ "11th grade",
     grade == 4 ~ "12th grade"
   ))
-merged$grade_2 <- factor(merged$grade_2, levels = c("9th grade", "10th grade", "11th grade", "12th grade"))
+yrbs_all$grade_2 <- factor(yrbs_all$grade_2, levels = c("9th grade", "10th grade", "11th grade", "12th grade"))
 
 # Sad or hopeless for 2+ weeks
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   sad_hopeless = case_when(
     q25 == 1 ~ 1,
     q25 == 2 ~ 0
   ))
 
 # Seriously considered suicide
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   cons_suicide = case_when(
     q26 == 1 ~ 1,
     q26 == 2 ~ 0
   ))
 
-# Plan for suicide
-merged <- merged %>% mutate(
-  plan_suicide = case_when(
-    q27 == 1 ~ 1,
-    q27 == 2 ~ 0
-  ))
-
 # Made suicide attempt
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   suicide_att = case_when(
-    q28 == 1        ~ 0,
-    q28 %in% c(2:5) ~ 1
-  ))
-
-# Physical fight
-merged <- merged %>% mutate(
-  fight = case_when(
-    q17 == 1        ~ 0,
-    q17 %in% c(2:8) ~ 1
+    q28 %in% c(2:5) ~ 1,
+    q28 == 1        ~ 0
   ))
 
 # Alcohol in past 30 days
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   alcohol = case_when(
-    q41 == 1        ~ 0,
-    q41 %in% c(2:7) ~ 1
+    q41 %in% c(2:7) ~ 1,
+    q41 == 1        ~ 0
   ))
 
 # Marijuana in past 30 days
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   marijuana = case_when(
-    q47 == 1        ~ 0,
-    q47 %in% c(2:7) ~ 1
+    q47 %in% c(2:6) ~ 1,
+    q47 == 1        ~ 0
+  ))
+
+# Physical fight
+yrbs_all <- yrbs_all %>% mutate(
+  fight = case_when(
+    q17 %in% c(2:8) ~ 1,
+    q17 == 1        ~ 0
   ))
 
 # Lifetime minimum wage
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   wage_life = case_when(
     # 12 years or younger
     age == 1 ~ (Effective.Minimum.Wage.2020.Dollars + lag_by_1_inf +
@@ -255,17 +320,24 @@ merged <- merged %>% mutate(
                   lag_by_18_inf)/19
   ))
 
+# State has EITC program
+yrbs_all <- yrbs_all %>% mutate(
+  has_eitc = case_when(
+    federal_pct > 0 ~ 1,
+    TRUE ~ 0
+  ))
+
 ##############################################################################
 # Specify complex design
 ##############################################################################
 
 # Rescale weight so mean is 1
-merged$weight_2 <- merged$weight/66.61
+yrbs_all$weight_2 <- yrbs_all$weight/66.61
 
 # Define complex sampling design
 # Nest strata within states and apply survey weights
 design_all <- svydesign(id=~PSU, strata=~stratum, nest=TRUE,
-                        weights=~weight_2, data=merged)
+                        weights=~weight_2, data=yrbs_all)
 
 # Subset to years of interest
 design_sub <- subset(design_all, year %in% c(2000:2020))
@@ -275,191 +347,27 @@ design_sub <- subset(design_all, year %in% c(2000:2020))
 ##############################################################################
 
 # At least 1 outcome
-merged <- merged %>% mutate(
+yrbs_all <- yrbs_all %>% mutate(
   has_outcome = case_when(
-    !is.na(sad_hopeless) | !is.na(plan_suicide) | !is.na(suicide_att) | !is.na(fight) ~ 1
+    !is.na(sad_hopeless) | !is.na(cons_suicide) | !is.na(suicide_att) |
+      !is.na(fight) | !is.na(alcohol) | !is.na(marijuana) ~ 1
   ))
 
 # Complete cases for covariates
-merged_demo <- merged %>%
+yrbs_all_model <- yrbs_all %>%
   subset(., year %in% c(2000:2020)) %>%
-  filter_at(vars(Effective.Minimum.Wage, has_outcome, age_2, sex_2, race_eth_2,
-                 grade_2), all_vars(!is.na(.)))
+  filter_at(vars(Effective.Minimum.Wage, has_outcome,
+                 age_2, sex_2, race_eth_2, grade_2), all_vars(!is.na(.)))
 
 # Child characteristics: unweighted
 # This line provides demographic characteristics without survey weights.
 summary(tableby(~ age_2 + sex_2 + race_eth_2 + grade_2,
-                merged_demo, digits.pct=0), text=T)
+                yrbs_all_model, digits.pct=0), text=T)
 
 # Child characteristics: weighted
 # This line provides demographic characteristics with survey weights.
 summary(tableby(~ age_2 + sex_2 + race_eth_2 + grade_2,
-                merged_demo, digits.pct=0, weights=weight_2), text=T)
-
-##############################################################################
-# Figure 2: Associations between FPL and outcomes
-##############################################################################
-
-# Explore unadjusted associations
-prop.table(svytable(~sad_hopeless, design=design_sub))
-prop.table(svytable(~cons_suicide, design=design_sub))
-prop.table(svytable(~suicide_att,  design=design_sub))
-prop.table(svytable(~fight,        design=design_sub))
-prop.table(svytable(~alcohol,      design=design_sub))
-prop.table(svytable(~marijuana,    design=design_sub))
-
-# # Explore adjusted associations
-# model_fpl_dep <- svyglm(depression ~
-#                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
-#                           year + fipsst,
-#                         design = design_sub)
-# summary(model_fpl_dep)
-# 
-# model_fpl_anx <- svyglm(anxiety ~
-#                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
-#                           year + fipsst,
-#                         design = design_sub)
-# summary(model_fpl_anx)
-# 
-# model_fpl_add <- svyglm(adhd ~
-#                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
-#                           year + fipsst,
-#                         design = design_sub)
-# summary(model_fpl_add)
-# 
-# model_fpl_beh <- svyglm(behavior ~
-#                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
-#                           year + fipsst,
-#                         design = design_sub)
-# summary(model_fpl_beh)
-# 
-# model_fpl_unm <- svyglm(unmet_needs ~
-#                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
-#                           year + fipsst,
-#                         design = design_sub)
-# summary(model_fpl_unm)
-# 
-# model_fpl_men <- svyglm(unmet_mental ~
-#                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
-#                           year + fipsst,
-#                         design = design_sub)
-# summary(model_fpl_men)
-# 
-# model_fpl_dig <- svyglm(stomach_r ~
-#                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
-#                           year + fipsst,
-#                         design = design_sub)
-# summary(model_fpl_dig)
-# 
-# model_fpl_sch <- svyglm(missed_school ~
-#                           age + sex + race_eth + family_struc + adult_edu + fpl_category + nativity +
-#                           year + fipsst,
-#                         design = design_sub)
-# summary(model_fpl_sch)
-# 
-# # Generate marginal means
-# means_dep <- estimate_means(model_fpl_dep, at="fpl_category")
-# means_anx <- estimate_means(model_fpl_anx, at="fpl_category")
-# means_add <- estimate_means(model_fpl_add, at="fpl_category")
-# means_beh <- estimate_means(model_fpl_beh, at="fpl_category")
-# means_dig <- estimate_means(model_fpl_dig, at="fpl_category")
-# means_unm <- estimate_means(model_fpl_unm, at="fpl_category")
-# means_men <- estimate_means(model_fpl_men, at="fpl_category")
-# means_sch <- estimate_means(model_fpl_sch, at="fpl_category")
-# 
-# # Dataframe of rates
-# means_all <- as.data.frame(rbind(
-#   # Depression
-#   cbind("Depression", "Less than 100%",  means_dep$Mean[1], means_dep$SE[1]),
-#   cbind("Depression", "100% to 199%",    means_dep$Mean[2], means_dep$SE[2]),
-#   cbind("Depression", "200% to 299%",    means_dep$Mean[3], means_dep$SE[3]),
-#   cbind("Depression", "300% to 399%",    means_dep$Mean[4], means_dep$SE[4]),
-#   cbind("Depression", "400% or greater", means_dep$Mean[5], means_dep$SE[5]),
-#   
-#   # Anxiety
-#   cbind("Anxiety", "Less than 100%",  means_anx$Mean[1], means_anx$SE[1]),
-#   cbind("Anxiety", "100% to 199%",    means_anx$Mean[2], means_anx$SE[2]),
-#   cbind("Anxiety", "200% to 299%",    means_anx$Mean[3], means_anx$SE[3]),
-#   cbind("Anxiety", "300% to 399%",    means_anx$Mean[4], means_anx$SE[4]),
-#   cbind("Anxiety", "400% or greater", means_anx$Mean[5], means_anx$SE[5]),
-#   
-#   # ADD/ADHD
-#   cbind("ADD/ADHD", "Less than 100%",  means_add$Mean[1], means_add$SE[1]),
-#   cbind("ADD/ADHD", "100% to 199%",    means_add$Mean[2], means_add$SE[2]),
-#   cbind("ADD/ADHD", "200% to 299%",    means_add$Mean[3], means_add$SE[3]),
-#   cbind("ADD/ADHD", "300% to 399%",    means_add$Mean[4], means_add$SE[4]),
-#   cbind("ADD/ADHD", "400% or greater", means_add$Mean[5], means_add$SE[5]),
-#   
-#   # Behavioral problems
-#   cbind("Behavioral prob.", "Less than 100%",  means_beh$Mean[1], means_beh$SE[1]),
-#   cbind("Behavioral prob.", "100% to 199%",    means_beh$Mean[2], means_beh$SE[2]),
-#   cbind("Behavioral prob.", "200% to 299%",    means_beh$Mean[3], means_beh$SE[3]),
-#   cbind("Behavioral prob.", "300% to 399%",    means_beh$Mean[4], means_beh$SE[4]),
-#   cbind("Behavioral prob.", "400% or greater", means_beh$Mean[5], means_beh$SE[5]),
-#   
-#   # Digestive issues
-#   cbind("Digestive issues", "Less than 100%",  means_dig$Mean[1], means_dig$SE[1]),
-#   cbind("Digestive issues", "100% to 199%",    means_dig$Mean[2], means_dig$SE[2]),
-#   cbind("Digestive issues", "200% to 299%",    means_dig$Mean[3], means_dig$SE[3]),
-#   cbind("Digestive issues", "300% to 399%",    means_dig$Mean[4], means_dig$SE[4]),
-#   cbind("Digestive issues", "400% or greater", means_dig$Mean[5], means_dig$SE[5]),
-#   
-#   # Unmet health care needs (any)
-#   cbind("Unmet health care\n(of any kind)", "Less than 100%",  means_unm$Mean[1], means_unm$SE[1]),
-#   cbind("Unmet health care\n(of any kind)", "100% to 199%",    means_unm$Mean[2], means_unm$SE[2]),
-#   cbind("Unmet health care\n(of any kind)", "200% to 299%",    means_unm$Mean[3], means_unm$SE[3]),
-#   cbind("Unmet health care\n(of any kind)", "300% to 399%",    means_unm$Mean[4], means_unm$SE[4]),
-#   cbind("Unmet health care\n(of any kind)", "400% or greater", means_unm$Mean[5], means_unm$SE[5]),
-#   
-#   # Unmet health care needs (mental health)
-#   cbind("Unmet health care\n(mental health)", "Less than 100%",  means_men$Mean[1], means_men$SE[1]),
-#   cbind("Unmet health care\n(mental health)", "100% to 199%",    means_men$Mean[2], means_men$SE[2]),
-#   cbind("Unmet health care\n(mental health)", "200% to 299%",    means_men$Mean[3], means_men$SE[3]),
-#   cbind("Unmet health care\n(mental health)", "300% to 399%",    means_men$Mean[4], means_men$SE[4]),
-#   cbind("Unmet health care\n(mental health)", "400% or greater", means_men$Mean[5], means_men$SE[5]),
-#   
-#   # Missed school
-#   cbind("Missed school", "Less than 100%",  means_sch$Mean[1], means_sch$SE[1]),
-#   cbind("Missed school", "100% to 199%",    means_sch$Mean[2], means_sch$SE[2]),
-#   cbind("Missed school", "200% to 299%",    means_sch$Mean[3], means_sch$SE[3]),
-#   cbind("Missed school", "300% to 399%",    means_sch$Mean[4], means_sch$SE[4]),
-#   cbind("Missed school", "400% or greater", means_sch$Mean[5], means_sch$SE[5])
-# ))
-# colnames(means_all) <- c("Outcome", "FPL level", "value", "se")
-# 
-# # Reorder factor levels
-# means_all$`FPL level` <- factor(means_all$`FPL level`, levels = c("Less than 100%", "100% to 199%", "200% to 299%", "300% to 399%", "400% or greater"))
-# means_all$Outcome <- factor(means_all$Outcome, levels = c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Unmet health care\n(of any kind)", "Unmet health care\n(mental health)", "Missed school"))
-# 
-# # Treat adjusted means and SEs as numeric
-# means_all$value <- as.numeric(as.character(means_all$value))
-# means_all$se    <- as.numeric(as.character(means_all$se))
-# 
-# # Plot means by outcome
-# plot_means <- ggplot(means_all, aes(x=`FPL level`, y=value, fill=`FPL level`)) +
-#   geom_bar(stat = "identity") +
-#   geom_errorbar(aes(ymin=value-1.96*se, ymax=value+1.96*se), width=0.2) +
-#   ylab("Rate of mental health outcome,\nadjusted for demographics") +
-#   xlab("Household FPL level") +
-#   theme_test() +
-#   theme(legend.position = "bottom",
-#         text = element_text(size=10, face="bold"),
-#         axis.ticks = element_blank(),
-#         axis.text.x = element_blank(),
-#         panel.grid.major.y = element_line(color="gray", size=0.5),
-#         panel.grid.minor.y = element_line(color="gray", size=0.25),
-#         strip.background = element_blank(),
-#         panel.border = element_blank(),
-#         panel.spacing = unit(0.5, "cm", data = NULL),
-#         strip.text = element_text(size=10)) +
-#   scale_y_continuous(labels = scales::percent,
-#                      breaks=c(0, 0.05, 0.10, 0.15)) +
-#   scale_fill_grey(start=0.4, end=0.8, name="") +
-#   facet_grid(~Outcome, nrow=2, scales="free", space="free")
-# print(plot_means)
-# 
-# # Export figure
-# ggsave(plot=plot_means, file="Adjusted rates of outcomes.pdf", width=7, height=7, units='in', dpi=600)
+                yrbs_all_model, digits.pct=0, weights=weight_2), text=T)
 
 ##############################################################################
 # Figure 1: U.S. maps for minimum wages
@@ -470,7 +378,7 @@ prop.table(svytable(~marijuana,    design=design_sub))
 min_wage_df$state <- min_wage_df$State
 
 # Generate lagged minimum wage
-# Gets minimum wage of 4 years prior in same state
+# Gets minimum wage of 18 years prior in same state
 min_wage_df <- min_wage_df %>%
   group_by(state) %>%
   mutate(lag_by_18 = lag(Effective.Minimum.Wage, n=18, default=NA))
@@ -524,304 +432,875 @@ maps_all <- plot_grid(map_2001, map_2019, map_change, nrow=3)
 ggsave(plot=maps_all, file="Map of minimum wages, YRBS.pdf", width=5, height=7, units='in', dpi=600)
 
 ##############################################################################
-# Effect of minimum wage on mental health outcomes
+# Figure 1: Map of minimum wages
+##############################################################################
+
+# Rename states with abbreviations
+min_wage_df <- min_wage_df %>% mutate(
+  state_map_order = case_when(
+    State == "Alabama"        ~ "Ala.",
+    State == "Alaska"         ~ "Alaska",
+    State == "Arizona"        ~ "Ariz.",
+    State == "Arkansas"       ~ "Ark.",
+    State == "California"     ~ "Calif.",
+    State == "Colorado"       ~ "Colo.",
+    State == "Connecticut"    ~ "Conn.",
+    State == "Delaware"       ~ "Del.",
+    State == "District of Columbia" ~ "D.C.",
+    State == "Florida"        ~ "Fla.",
+    State == "Georgia"        ~ "Ga.",
+    State == "Hawaii"         ~ "Hawaii",
+    State == "Idaho"          ~ "Idaho",
+    State == "Illinois"       ~ "Ill.",
+    State == "Indiana"        ~ "Ind.",
+    State == "Iowa"           ~ "Iowa",
+    State == "Kansas"         ~ "Kan.",
+    State == "Kentucky"       ~ "Ky.",
+    State == "Louisiana"      ~ "La.",
+    State == "Maine"          ~ "Maine",
+    State == "Maryland"       ~ "Md.",
+    State == "Massachusetts"  ~ "Mass.",
+    State == "Michigan"       ~ "Mich.",
+    State == "Minnesota"      ~ "Minn.",
+    State == "Mississippi"    ~ "Miss.",
+    State == "Missouri"       ~ "Mo.",
+    State == "Montana"        ~ "Mont.",
+    State == "Nebraska"       ~ "Neb.",
+    State == "Nevada"         ~ "Nev.",
+    State == "New Hampshire"  ~ "N.H.",
+    State == "New Jersey"     ~ "N.J.",
+    State == "New Mexico"     ~ "N.M.",
+    State == "New York"       ~ "N.Y.",
+    State == "North Carolina" ~ "N.C.",
+    State == "North Dakota"   ~ "N.D.",
+    State == "Ohio"           ~ "Ohio",
+    State == "Oklahoma"       ~ "Okla.",
+    State == "Oregon"         ~ "Ore.",
+    State == "Pennsylvania"   ~ "Pa.",
+    State == "Rhode Island"   ~ "R.I.",
+    State == "South Carolina" ~ "S.C.",
+    State == "South Dakota"   ~ "S.D.",
+    State == "Tennessee"      ~ "Tenn.",
+    State == "Texas"          ~ "Texas",
+    State == "Utah"           ~ "Utah",
+    State == "Vermont"        ~ "Vt.",
+    State == "Virginia"       ~ "Va.",
+    State == "Washington"     ~ "Wash.",
+    State == "West Virginia"  ~ "W.Va.",
+    State == "Wisconsin"      ~ "Wis.",
+    State == "Wyoming"        ~ "Wyo."
+  ))
+
+# Generate blanks for empty facets
+bl = sapply(1:37, function(n) paste(rep(" ", n), collapse=""))
+
+# Set facet order for states
+min_wage_df$state_map_order <-
+  factor(min_wage_df$state_map_order,
+         levels = c("Alaska", bl[2:10], "Maine", bl[11:19], "Vt.", "N.H.",
+                    "Wash.", "Idaho", "Mont.", "N.D.", "Minn.", "Ill.", "Wis.", "Mich.", "N.Y.", "R.I.", "Mass.",
+                    "Ore.", "Nev.", "Wyo.", "S.D.", "Iowa", "Ind.", "Ohio", "Pa.", "N.J.", "Conn.", bl[20],
+                    "Calif.", "Utah", "Colo.", "Neb.", "Mo.", "Ky.", "W.Va.", "Va.", "Md.", "Del.", bl[21],
+                    bl[22], "Ariz.", "N.M.", "Kan.", "Ark.", "Tenn.", "N.C.", "S.C.", "D.C.", bl[23:24],
+                    bl[25:27], "Okla.", "La.", "Miss.", "Ala.", "Ga.", bl[28:30],
+                    "Hawaii", bl[31:32], "Texas", bl[33:36], "Fla."))
+
+# Subset to study period and states
+min_wage_df_sub <- subset(min_wage_df, year %in% c(2001:2020) &
+                            fipsst %in% c(1:56))
+
+# Plot minimum wages in shape of U.S.
+wage_map_plot <- ggplot(min_wage_df_sub, aes(x=year, y=Effective.Minimum.Wage)) +
+  geom_line() +
+  facet_wrap(~state_map_order, ncol = 11, drop=F, strip.position="bottom") +
+  ylab("Effective minimum wage") +
+  xlab("Year (2001-2020)") +
+  theme_classic() +
+  theme(text = element_text(size = 10, face = "bold"),
+        axis.text.x = element_blank(),
+        strip.background = element_blank(),
+        axis.line  = element_blank(),
+        axis.ticks = element_blank()) +
+  scale_y_continuous(breaks=c(5.15, 14),
+                     labels=c("$5.15", "$14"))
+
+# Export figure
+ggsave(plot=wage_map_plot, file="Exhibits/Minimum wage map plot.pdf", width=7, height=5, units='in', dpi=600)
+
+##############################################################################
+# Functions for TWFE models
 ##############################################################################
 
 # Generate sampling clusters
-merged$cluster <- paste0(merged$PSU, "-", merged$stratum)
+yrbs_all_model$cluster <- paste0(yrbs_all_model$fipsst, "-", yrbs_all_model$PSU, "-", yrbs_all_model$stratum)
 
 # Generate age-by-year fixed effects
-merged$age_year <- paste0(merged$age_2, "-", merged$year)
+yrbs_all_model$age_year <- paste0(yrbs_all_model$age_2, "-", yrbs_all_model$year)
 
-# Subset to years of interest
-merged_sub <- subset(merged, year %in% c(2000:2020))
+# Function to extract values from TWFE models.
+# Requires: Df for saving coefficients, "lfe" model, title of model.
+# Returns: Df of values, ready to pass to "clean_coef_df".
+make_coef_df <- function(coef_df, model, TITLE) {
+  
+  # Get outcome and category labels
+  if (model$lhs == "sad_hopeless") {
+    outcome  <- "Sad or hopeless"
+    category <- "Symptoms"}
+  
+  if (model$lhs == "cons_suicide") {
+    outcome  <- "Considered suicide"
+    category <- "Symptoms"}
+  
+  if (model$lhs == "suicide_att") {
+    outcome  <- "Attempted suicide"
+    category <- "Symptoms"}
+  
+  if (model$lhs == "alcohol") {
+    outcome  <- "Recent alcohol"
+    category <- "Substances"}
+  
+  if (model$lhs == "marijuana") {
+    outcome  <- "Recent marijuana"
+    category <- "Substances"}
+  
+  if (model$lhs == "fight") {
+    outcome  <- "Physical fight"
+    category <- "School"}
+  
+  # Add row to coefficient df
+  coef_df <- rbind(coef_df, cbind(
+    outcome, category, TITLE, model$coef[1], model$cse[1], length(model$residuals)))
+  
+  # Return coefficient df
+  return(coef_df)
+}
 
-# Models for sad and hopeless
+# Function to clean dataframe of TWFE coefficients.
+# Requires: Df with columns specified by "make_coef_df".
+# Returns: Cleaned dataframe, ready to use in ggplot2.
+clean_coef_df <- function(coef_df) {
+  
+  # Treat as dataframe
+  coef_df <- as.data.frame(coef_df)
+  
+  # Name columns
+  colnames(coef_df) <- c("Outcome", "Category", "Sample", "effect", "se", "n")
+  
+  # Treat columns as numeric
+  coef_df$effect <- as.numeric(coef_df$effect)
+  coef_df$se     <- as.numeric(coef_df$se)
+  coef_df$n      <- as.numeric(coef_df$n)
+  
+  # Reorder outcomes
+  coef_df$Outcome <- factor(
+    coef_df$Outcome, levels=c("Sad or hopeless", "Considered suicide", "Attempted suicide", "Recent alcohol", "Recent marijuana", "Physical fight"))
+  
+  # Reorder categories
+  coef_df$Category <- factor(
+    coef_df$Category, levels=c("Symptoms", "Substances", "School"))
+  
+  # Reorder samples
+  coef_df$Sample <- factor(
+    coef_df$Sample, levels=c(
+      
+      # Standard models
+      "Adolescents (FE only)",
+      "Adolescents (fully adjusted)",
+      
+      # Sub-population models
+      "Black or Hispanic/Latino",
+      
+      # Robustness checks
+      "Adolescents (2020 dollars)",
+      "Adolescents (lagged wage)",
+      
+      # State-level cluster models
+      "Adolescents (FE only, nested clust.)",
+      "Adolescents (FE only, state clust.)",
+      "Adolescents (fully adj., nested clust.)",
+      "Adolescents (fully adj., state clust.)"
+    ))
+  
+  # Return df
+  return(coef_df)
+}
+
+# Function to generate coefficient plots.
+# Requires: Df of coefficients, y title, y limits, color order.
+# Returns: Formatted coefficient plot.
+print_coef_plot <- function(coef_df, Y_TITLE, Y_MIN, Y_MAX, COLORS) {
+  
+  # Set grayscale colors
+  if (COLORS == "Standard") {
+    COLOR_MAX <- 0
+    COLOR_MIN <- 0.7
+  }
+  if (COLORS == "Reversed") {
+    COLOR_MAX <- 0.7
+    COLOR_MIN <- 0
+  }
+  
+  # Generate coefficient plot
+  plot <- ggplot(coef_df, aes(x=Outcome, y=effect, group=Sample, color=Sample)) +
+    
+    # Null line
+    geom_hline(yintercept=0, color="black", linewidth=0.25) +
+    
+    # Point estimates with distinct shapes
+    geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
+    scale_shape_manual(values = 1:nlevels(coef_df$Sample)) +
+    
+    # Confidence intervals
+    geom_errorbar(aes(ymin=effect-1.96*se, ymax=effect+1.96*se),
+                  position = position_dodge(width=0.6), width=0, linewidth=0.8) +
+    geom_errorbar(aes(ymin=effect-2.94*se, ymax=effect+2.94*se),
+                  position = position_dodge(width=0.6), width=0.3, alpha=0.5) +
+    
+    # Titles
+    ylab(Y_TITLE) +
+    ggtitle("Adolescents (12-18), 2001-2019") +
+    
+    # Theme modifications
+    theme_test() +
+    theme(legend.position = "bottom",
+          text = element_text(size = 10, face = "bold"),
+          axis.text.x = element_text(angle=45, hjust=1, vjust=1),
+          axis.title.x = element_blank(),
+          axis.ticks = element_blank(),
+          strip.background = element_blank(),
+          legend.title = element_blank(),
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_line(color="light gray", linewidth=0.5),
+          panel.grid.minor.y = element_line(color="light gray", linewidth=0.25)) +
+    scale_y_continuous(limits = c(Y_MIN, Y_MAX),
+                       breaks = seq(-0.1, 0.1, 0.02),
+                       minor_breaks = seq(-0.1, 0.1, 0.01),
+                       labels = function(x) paste0(x*100," pp")) +
+    scale_color_grey(start=COLOR_MIN, end=COLOR_MAX) +
+    facet_grid(~Category, scales="free", space="free_x")
+  
+  # Return plot
+  return(plot)
+}
+
+##############################################################################
+# Main TWFE models: Minimum wage and mental health
+##############################################################################
+
+# Sad and hopeless
 model_min_sad_1 <- felm(sad_hopeless ~ Effective.Minimum.Wage |
                           age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 model_min_sad_2 <- felm(sad_hopeless ~ Effective.Minimum.Wage +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_sad_4 <- felm(sad_hopeless ~ Effective.Minimum.Wage.2020.Dollars +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_sad_5 <- felm(sad_hopeless ~ lag_by_1 +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_sad_7 <- felm(sad_hopeless ~ Effective.Minimum.Wage*race_eth_cat +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 
-# Models for considered suicide
+# Considered suicide
 model_min_con_1 <- felm(cons_suicide ~ Effective.Minimum.Wage |
                           age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 model_min_con_2 <- felm(cons_suicide ~ Effective.Minimum.Wage +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_con_4 <- felm(cons_suicide ~ Effective.Minimum.Wage.2020.Dollars +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_con_5 <- felm(cons_suicide ~ lag_by_1 +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_con_7 <- felm(cons_suicide ~ Effective.Minimum.Wage*race_eth_cat +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 
-# Models for attempted suicide
+# Attempted suicide
 model_min_att_1 <- felm(suicide_att ~ Effective.Minimum.Wage |
                           age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 model_min_att_2 <- felm(suicide_att ~ Effective.Minimum.Wage +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_att_4 <- felm(suicide_att ~ Effective.Minimum.Wage.2020.Dollars +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_att_5 <- felm(suicide_att ~ lag_by_1 +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_att_7 <- felm(suicide_att ~ Effective.Minimum.Wage*race_eth_cat +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 
-# Models for physical fight
-model_min_fgh_1 <- felm(fight ~ Effective.Minimum.Wage |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_fgh_2 <- felm(fight ~ Effective.Minimum.Wage +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_fgh_4 <- felm(fight ~ Effective.Minimum.Wage.2020.Dollars +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_fgh_5 <- felm(fight ~ lag_by_1 +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_fgh_7 <- felm(fight ~ Effective.Minimum.Wage*race_eth_cat +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-
-# Models for recent alcohol use
+# Recent alcohol
 model_min_alc_1 <- felm(alcohol ~ Effective.Minimum.Wage |
                           age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 model_min_alc_2 <- felm(alcohol ~ Effective.Minimum.Wage +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_alc_4 <- felm(alcohol ~ Effective.Minimum.Wage.2020.Dollars +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_alc_5 <- felm(alcohol ~ lag_by_1 +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_alc_7 <- felm(alcohol ~ Effective.Minimum.Wage*race_eth_cat +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 
-# Models for recent marijuana use
+# Recent marijuana
 model_min_mjn_1 <- felm(marijuana ~ Effective.Minimum.Wage |
                           age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 model_min_mjn_2 <- felm(marijuana ~ Effective.Minimum.Wage +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_mjn_4 <- felm(marijuana ~ Effective.Minimum.Wage.2020.Dollars +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_mjn_5 <- felm(marijuana ~ lag_by_1 +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
-model_min_mjn_7 <- felm(marijuana ~ Effective.Minimum.Wage*race_eth_cat +
-                          age_2 + sex_2 + race_eth_2 + grade_2 |
-                          age_year + fipsst | 0 | cluster,
-                        data    = merged_sub,
-                        weights = merged_sub$weight_2)
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 
-# Get range of sample sizes
-list <- cbind(
-  # Sad or hopeless
-  length(model_min_sad_1$residuals), length(model_min_sad_2$residuals),
-  length(model_min_sad_4$residuals), length(model_min_sad_5$residuals),
-  length(model_min_sad_7$residuals),
-  
-  # Considered suicide
-  length(model_min_con_1$residuals), length(model_min_con_2$residuals),
-  length(model_min_con_4$residuals), length(model_min_con_5$residuals),
-  length(model_min_con_7$residuals),
-  
-  # Attempted suicide
-  length(model_min_att_1$residuals), length(model_min_att_2$residuals),
-  length(model_min_att_4$residuals), length(model_min_att_5$residuals),
-  length(model_min_att_7$residuals),
-  
-  # Attempted suicide
-  length(model_min_fgh_1$residuals), length(model_min_fgh_2$residuals),
-  length(model_min_fgh_4$residuals), length(model_min_fgh_5$residuals),
-  length(model_min_fgh_7$residuals),
-  
-  # Recent alcohol use
-  length(model_min_alc_1$residuals), length(model_min_alc_2$residuals),
-  length(model_min_alc_4$residuals), length(model_min_alc_5$residuals),
-  length(model_min_alc_7$residuals),
-  
-  # Recent marijuana use
-  length(model_min_mjn_1$residuals), length(model_min_mjn_2$residuals),
-  length(model_min_mjn_4$residuals), length(model_min_mjn_5$residuals),
-  length(model_min_mjn_7$residuals)
-  )
-min(list); max(list)
+# Physical fight
+model_min_fgh_1 <- felm(fight ~ Effective.Minimum.Wage |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+model_min_fgh_2 <- felm(fight ~ Effective.Minimum.Wage +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
 
-# Extract coefficients of interest
-main_vals <- as.data.frame(rbind(
-  # Sad or hopeless
-  cbind("Sad or hopeless", "Symptoms", "All children (unadjusted)",
-        model_min_sad_1$coefficients[1], model_min_sad_1$cse[1]),
-  cbind("Sad or hopeless", "Symptoms", "All children (adjusted)",
-        model_min_sad_2$coefficients[1], model_min_sad_2$cse[1]),
-  cbind("Sad or hopeless", "Symptoms", "Black or Hispanic/Latino",
-        model_min_sad_7$coefficients[1], model_min_sad_7$cse[1]),
-  cbind("Sad or hopeless", "Symptoms", "All children (2020 dollars)",
-        model_min_sad_4$coefficients[1], model_min_sad_4$cse[1]),
-  cbind("Sad or hopeless", "Symptoms", "All children (lagged wage)",
-        model_min_sad_5$coefficients[1], model_min_sad_5$cse[1]),
+# Get values from models
+main_df <- NULL
+
+# Adolescents (FE only)
+main_df <- make_coef_df(main_df, model_min_sad_1, "Adolescents (FE only)")
+main_df <- make_coef_df(main_df, model_min_con_1, "Adolescents (FE only)")
+main_df <- make_coef_df(main_df, model_min_att_1, "Adolescents (FE only)")
+main_df <- make_coef_df(main_df, model_min_alc_1, "Adolescents (FE only)")
+main_df <- make_coef_df(main_df, model_min_mjn_1, "Adolescents (FE only)")
+main_df <- make_coef_df(main_df, model_min_fgh_1, "Adolescents (FE only)")
+
+# Adolescents (fully adjusted)
+main_df <- make_coef_df(main_df, model_min_sad_2, "Adolescents (fully adjusted)")
+main_df <- make_coef_df(main_df, model_min_con_2, "Adolescents (fully adjusted)")
+main_df <- make_coef_df(main_df, model_min_att_2, "Adolescents (fully adjusted)")
+main_df <- make_coef_df(main_df, model_min_alc_2, "Adolescents (fully adjusted)")
+main_df <- make_coef_df(main_df, model_min_mjn_2, "Adolescents (fully adjusted)")
+main_df <- make_coef_df(main_df, model_min_fgh_2, "Adolescents (fully adjusted)")
+
+# Clean dataframe of coefficients
+main_df <- clean_coef_df(main_df)
+
+# Get min. and max. N
+min(main_df$n); max(main_df$n)
+
+# Generate coefficient plot: Main
+plot_main <- print_coef_plot(
+  main_df,
+  Y_TITLE    = "Association of $1 increase in min. wage\nwith adolescents' mental health",
+  Y_MIN      = -0.045,
+  Y_MAX      =  0.045,
+  COLORS     = "Standard"
+)
+
+# Export figure
+ggsave(plot=plot_main, file="Exhibits/YRBS coefficient plot, main.pdf",
+       width=5, height=4, units='in', dpi=600)
+
+##############################################################################
+# Robustness check: Sub-population
+##############################################################################
+
+# Sad and hopeless
+model_min_sad_r <- felm(sad_hopeless ~ Effective.Minimum.Wage*race_eth_cat +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Considered suicide
+model_min_con_r <- felm(cons_suicide ~ Effective.Minimum.Wage*race_eth_cat +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Attempted suicide
+model_min_att_r <- felm(suicide_att ~ Effective.Minimum.Wage*race_eth_cat +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Recent alcohol
+model_min_alc_r <- felm(alcohol ~ Effective.Minimum.Wage*race_eth_cat +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Recent marijuana
+model_min_mjn_r <- felm(marijuana ~ Effective.Minimum.Wage*race_eth_cat +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Physical fight
+model_min_fgh_r <- felm(fight ~ Effective.Minimum.Wage*race_eth_cat +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Get values from models
+sub_df <- NULL
+
+# Black or Hispanic/Latino
+sub_df <- make_coef_df(sub_df, model_min_sad_r, "Black or Hispanic/Latino")
+sub_df <- make_coef_df(sub_df, model_min_con_r, "Black or Hispanic/Latino")
+sub_df <- make_coef_df(sub_df, model_min_att_r, "Black or Hispanic/Latino")
+sub_df <- make_coef_df(sub_df, model_min_alc_r, "Black or Hispanic/Latino")
+sub_df <- make_coef_df(sub_df, model_min_mjn_r, "Black or Hispanic/Latino")
+sub_df <- make_coef_df(sub_df, model_min_fgh_r, "Black or Hispanic/Latino")
+
+# Clean dataframe of coefficients
+sub_df <- clean_coef_df(sub_df)
+
+# Add main models for comparison
+sub_df <- rbind(sub_df, main_df %>% filter(Sample == "Adolescents (fully adjusted)"))
+
+# Get min. and max. N
+min(sub_df$n); max(sub_df$n)
+
+# Generate coefficient plot: Sub-population
+plot_sub <- print_coef_plot(
+  sub_df,
+  Y_TITLE    = "Association of $1 increase in min. wage\nwith adolescents' mental health",
+  Y_MIN      = -0.045,
+  Y_MAX      =  0.045,
+  COLORS     = "Reversed"
+)
+
+# Export figure
+ggsave(plot=plot_sub, file="Exhibits/YRBS coefficient plot, sub-population.pdf",
+       width=5, height=4, units='in', dpi=600)
+
+##############################################################################
+# Robustness check: Alternate specifications
+##############################################################################
+
+# Sad and hopeless
+model_min_sad_x <- felm(sad_hopeless ~ Effective.Minimum.Wage.2020.Dollars +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+model_min_sad_y <- felm(sad_hopeless ~ lag_by_1 +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Considered suicide
+model_min_con_x <- felm(cons_suicide ~ Effective.Minimum.Wage.2020.Dollars +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+model_min_con_y <- felm(cons_suicide ~ lag_by_1 +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Attempted suicide
+model_min_att_x <- felm(suicide_att ~ Effective.Minimum.Wage.2020.Dollars +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+model_min_att_y <- felm(suicide_att ~ lag_by_1 +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Recent alcohol
+model_min_alc_x <- felm(alcohol ~ Effective.Minimum.Wage.2020.Dollars +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+model_min_alc_y <- felm(alcohol ~ lag_by_1 +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Recent marijuana
+model_min_mjn_x <- felm(marijuana ~ Effective.Minimum.Wage.2020.Dollars +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+model_min_mjn_y <- felm(marijuana ~ lag_by_1 +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Physical fight
+model_min_fgh_x <- felm(fight ~ Effective.Minimum.Wage.2020.Dollars +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+model_min_fgh_y <- felm(fight ~ lag_by_1 +
+                          age_2 + sex_2 + race_eth_2 + grade_2 +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                          age_year + fipsst | 0 | cluster,
+                        data    = yrbs_all_model,
+                        weights = yrbs_all_model$weight_2)
+
+# Get values from models
+rob_df <- NULL
+
+# Adolescents (2020 dollars)
+rob_df <- make_coef_df(rob_df, model_min_sad_x, "Adolescents (2020 dollars)")
+rob_df <- make_coef_df(rob_df, model_min_con_x, "Adolescents (2020 dollars)")
+rob_df <- make_coef_df(rob_df, model_min_att_x, "Adolescents (2020 dollars)")
+rob_df <- make_coef_df(rob_df, model_min_alc_x, "Adolescents (2020 dollars)")
+rob_df <- make_coef_df(rob_df, model_min_mjn_x, "Adolescents (2020 dollars)")
+rob_df <- make_coef_df(rob_df, model_min_fgh_x, "Adolescents (2020 dollars)")
+
+# Adolescents (lagged wage)
+rob_df <- make_coef_df(rob_df, model_min_sad_y, "Adolescents (lagged wage)")
+rob_df <- make_coef_df(rob_df, model_min_con_y, "Adolescents (lagged wage)")
+rob_df <- make_coef_df(rob_df, model_min_att_y, "Adolescents (lagged wage)")
+rob_df <- make_coef_df(rob_df, model_min_alc_y, "Adolescents (lagged wage)")
+rob_df <- make_coef_df(rob_df, model_min_mjn_y, "Adolescents (lagged wage)")
+rob_df <- make_coef_df(rob_df, model_min_fgh_y, "Adolescents (lagged wage)")
+
+# Clean dataframe of coefficients
+rob_df <- clean_coef_df(rob_df)
+
+# Add main models for comparison
+rob_df <- rbind(rob_df, main_df %>% filter(Sample == "Adolescents (fully adjusted)"))
+
+# Get min. and max. N
+min(rob_df$n); max(rob_df$n)
+
+# Generate coefficient plot: Alternate specifications
+plot_rob <- print_coef_plot(
+  rob_df,
+  Y_TITLE    = "Association of $1 increase in min. wage\nwith adolescents' mental health",
+  Y_MIN      = -0.045,
+  Y_MAX      =  0.045,
+  COLORS     = "Reversed"
+)
+
+# Export figure
+ggsave(plot=plot_rob, file="Exhibits/YRBS coefficient plot, robustness.pdf",
+       width=7, height=4, units='in', dpi=600)
+
+##############################################################################
+# Robustness check: Logistic regression
+##############################################################################
+
+# Depression
+log_min_dep_1 <- svyglm(depression ~ Effective.Minimum.Wage +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+log_min_dep_2 <- svyglm(depression ~ Effective.Minimum.Wage +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+
+# Anxiety
+log_min_anx_1 <- svyglm(anxiety ~ Effective.Minimum.Wage +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+log_min_anx_2 <- svyglm(anxiety ~ Effective.Minimum.Wage +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+
+# ADD/ADHD
+log_min_add_1 <- svyglm(adhd ~ Effective.Minimum.Wage +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+log_min_add_2 <- svyglm(adhd ~ Effective.Minimum.Wage +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+
+# Behavioral problems
+log_min_beh_1 <- svyglm(behavior ~ Effective.Minimum.Wage +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+log_min_beh_2 <- svyglm(behavior ~ Effective.Minimum.Wage +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+
+# Digestive issues
+log_min_dig_1 <- svyglm(stomach_r ~ Effective.Minimum.Wage +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+log_min_dig_2 <- svyglm(stomach_r ~ Effective.Minimum.Wage +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+
+# Any unmet care
+log_min_unm_1 <- svyglm(unmet_needs ~ Effective.Minimum.Wage +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+log_min_unm_2 <- svyglm(unmet_needs ~ Effective.Minimum.Wage +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+
+# Unmet mental care
+log_min_men_1 <- svyglm(unmet_mental ~ Effective.Minimum.Wage +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+log_min_men_2 <- svyglm(unmet_mental ~ Effective.Minimum.Wage +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+
+# 7+ school absences
+log_min_sch_1 <- svyglm(missed_school ~ Effective.Minimum.Wage +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+log_min_sch_2 <- svyglm(missed_school ~ Effective.Minimum.Wage +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+
+# Child employment
+log_min_job_1 <- svyglm(child_job ~ Effective.Minimum.Wage +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+log_min_job_2 <- svyglm(child_job ~ Effective.Minimum.Wage +
+                          age + sex + race_eth + family_struc + adult_edu + nativity +
+                          elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 +
+                          year + fipsst,
+                        design = design_sub, family="quasibinomial")
+
+# Get values from models
+log_df <- as.data.frame(rbind(
+  # Depression
+  cbind("Depression", "Diagnoses", "All children (FE only)",
+        exp(coef(log_min_dep_1))[2],
+        exp(confint(log_min_dep_1))[2,1],
+        exp(confint(log_min_dep_1))[2,2],
+        exp(confint(log_min_dep_1, level=0.997))[2,1],
+        exp(confint(log_min_dep_1, level=0.997))[2,2],
+        length(log_min_dep_1$residuals)),
   
-  # Considered suicide
-  cbind("Considered suicide", "Symptoms", "All children (unadjusted)",
-        model_min_con_1$coefficients[1], model_min_con_1$cse[1]),
-  cbind("Considered suicide", "Symptoms", "All children (adjusted)",
-        model_min_con_2$coefficients[1], model_min_con_2$cse[1]),
-  cbind("Considered suicide", "Symptoms", "Black or Hispanic/Latino",
-        model_min_con_7$coefficients[1], model_min_con_7$cse[1]),
-  cbind("Considered suicide", "Symptoms", "All children (2020 dollars)",
-        model_min_con_4$coefficients[1], model_min_con_4$cse[1]),
-  cbind("Considered suicide", "Symptoms", "All children (lagged wage)",
-        model_min_con_5$coefficients[1], model_min_con_5$cse[1]),
+  cbind("Depression", "Diagnoses", "All children (fully adjusted)",
+        exp(coef(log_min_dep_2))[2],
+        exp(confint(log_min_dep_2))[2,1],
+        exp(confint(log_min_dep_2))[2,2],
+        exp(confint(log_min_dep_2, level=0.997))[2,1],
+        exp(confint(log_min_dep_2, level=0.997))[2,2],
+        length(log_min_dep_2$residuals)),
   
-  # Attempted suicide
-  cbind("Attempted suicide", "Symptoms", "All children (unadjusted)",
-        model_min_att_1$coefficients[1], model_min_att_1$cse[1]),
-  cbind("Attempted suicide", "Symptoms", "All children (adjusted)",
-        model_min_att_2$coefficients[1], model_min_att_2$cse[1]),
-  cbind("Attempted suicide", "Symptoms", "Black or Hispanic/Latino",
-        model_min_att_7$coefficients[1], model_min_att_7$cse[1]),
-  cbind("Attempted suicide", "Symptoms", "All children (2020 dollars)",
-        model_min_att_4$coefficients[1], model_min_att_4$cse[1]),
-  cbind("Attempted suicide", "Symptoms", "All children (lagged wage)",
-        model_min_att_5$coefficients[1], model_min_att_5$cse[1]),
+  # Anxiety
+  cbind("Anxiety", "Diagnoses", "All children (FE only)",
+        exp(coef(log_min_anx_1))[2],
+        exp(confint(log_min_anx_1))[2,1],
+        exp(confint(log_min_anx_1))[2,2],
+        exp(confint(log_min_anx_1, level=0.997))[2,1],
+        exp(confint(log_min_anx_1, level=0.997))[2,2],
+        length(log_min_anx_1$residuals)),
   
-  # Physical fight
-  cbind("Physical fight", "Life", "All children (unadjusted)",
-        model_min_fgh_1$coefficients[1], model_min_fgh_1$cse[1]),
-  cbind("Physical fight", "Life", "All children (adjusted)",
-        model_min_fgh_2$coefficients[1], model_min_fgh_2$cse[1]),
-  cbind("Physical fight", "Life", "Black or Hispanic/Latino",
-        model_min_fgh_7$coefficients[1], model_min_fgh_7$cse[1]),
-  cbind("Physical fight", "Life", "All children (2020 dollars)",
-        model_min_fgh_4$coefficients[1], model_min_fgh_4$cse[1]),
-  cbind("Physical fight", "Life", "All children (lagged wage)",
-        model_min_fgh_5$coefficients[1], model_min_fgh_5$cse[1]),
+  cbind("Anxiety", "Diagnoses", "All children (fully adjusted)",
+        exp(coef(log_min_anx_2))[2],
+        exp(confint(log_min_anx_2))[2,1],
+        exp(confint(log_min_anx_2))[2,2],
+        exp(confint(log_min_anx_2, level=0.997))[2,1],
+        exp(confint(log_min_anx_2, level=0.997))[2,2],
+        length(log_min_anx_2$residuals)),
   
-  # Recent alcohol use
-  cbind("Recent alcohol", "Life", "All children (unadjusted)",
-        model_min_alc_1$coefficients[1], model_min_alc_1$cse[1]),
-  cbind("Recent alcohol", "Life", "All children (adjusted)",
-        model_min_alc_2$coefficients[1], model_min_alc_2$cse[1]),
-  cbind("Recent alcohol", "Life", "Black or Hispanic/Latino",
-        model_min_alc_7$coefficients[1], model_min_alc_7$cse[1]),
-  cbind("Recent alcohol", "Life", "All children (2020 dollars)",
-        model_min_alc_4$coefficients[1], model_min_alc_4$cse[1]),
-  cbind("Recent alcohol", "Life", "All children (lagged wage)",
-        model_min_alc_5$coefficients[1], model_min_alc_5$cse[1]),
+  # ADD/ADHD
+  cbind("ADD/ADHD", "Diagnoses", "All children (FE only)",
+        exp(coef(log_min_add_1))[2],
+        exp(confint(log_min_add_1))[2,1],
+        exp(confint(log_min_add_1))[2,2],
+        exp(confint(log_min_add_1, level=0.997))[2,1],
+        exp(confint(log_min_add_1, level=0.997))[2,2],
+        length(log_min_add_1$residuals)),
   
-  # Recent marijuana use
-  cbind("Recent marijuana", "Life", "All children (unadjusted)",
-        model_min_mjn_1$coefficients[1], model_min_mjn_1$cse[1]),
-  cbind("Recent marijuana", "Life", "All children (adjusted)",
-        model_min_mjn_2$coefficients[1], model_min_mjn_2$cse[1]),
-  cbind("Recent marijuana", "Life", "Black or Hispanic/Latino",
-        model_min_mjn_7$coefficients[1], model_min_mjn_7$cse[1]),
-  cbind("Recent marijuana", "Life", "All children (2020 dollars)",
-        model_min_mjn_4$coefficients[1], model_min_mjn_4$cse[1]),
-  cbind("Recent marijuana", "Life", "All children (lagged wage)",
-        model_min_mjn_5$coefficients[1], model_min_mjn_5$cse[1])
+  cbind("ADD/ADHD", "Diagnoses", "All children (fully adjusted)",
+        exp(coef(log_min_add_2))[2],
+        exp(confint(log_min_add_2))[2,1],
+        exp(confint(log_min_add_2))[2,2],
+        exp(confint(log_min_add_2, level=0.997))[2,1],
+        exp(confint(log_min_add_2, level=0.997))[2,2],
+        length(log_min_add_2$residuals)),
+  
+  # Behavioral problems
+  cbind("Behavioral prob.", "Diagnoses", "All children (FE only)",
+        exp(coef(log_min_beh_1))[2],
+        exp(confint(log_min_beh_1))[2,1],
+        exp(confint(log_min_beh_1))[2,2],
+        exp(confint(log_min_beh_1, level=0.997))[2,1],
+        exp(confint(log_min_beh_1, level=0.997))[2,2],
+        length(log_min_beh_1$residuals)),
+  
+  cbind("Behavioral prob.", "Diagnoses", "All children (fully adjusted)",
+        exp(coef(log_min_beh_2))[2],
+        exp(confint(log_min_beh_2))[2,1],
+        exp(confint(log_min_beh_2))[2,2],
+        exp(confint(log_min_beh_2, level=0.997))[2,1],
+        exp(confint(log_min_beh_2, level=0.997))[2,2],
+        length(log_min_beh_2$residuals)),
+  
+  # Digestive issues
+  cbind("Digestive issues", "Sx.", "All children (FE only)",
+        exp(coef(log_min_dig_1))[2],
+        exp(confint(log_min_dig_1))[2,1],
+        exp(confint(log_min_dig_1))[2,2],
+        exp(confint(log_min_dig_1, level=0.997))[2,1],
+        exp(confint(log_min_dig_1, level=0.997))[2,2],
+        length(log_min_dig_1$residuals)),
+  
+  cbind("Digestive issues", "Sx.", "All children (fully adjusted)",
+        exp(coef(log_min_dig_2))[2],
+        exp(confint(log_min_dig_2))[2,1],
+        exp(confint(log_min_dig_2))[2,2],
+        exp(confint(log_min_dig_2, level=0.997))[2,1],
+        exp(confint(log_min_dig_2, level=0.997))[2,2],
+        length(log_min_dig_2$residuals)),
+  
+  # Any unmet care
+  cbind("Any unmet care", "Health care", "All children (FE only)",
+        exp(coef(log_min_unm_1))[2],
+        exp(confint(log_min_unm_1))[2,1],
+        exp(confint(log_min_unm_1))[2,2],
+        exp(confint(log_min_unm_1, level=0.997))[2,1],
+        exp(confint(log_min_unm_1, level=0.997))[2,2],
+        length(log_min_unm_1$residuals)),
+  
+  cbind("Any unmet care", "Health care", "All children (fully adjusted)",
+        exp(coef(log_min_unm_2))[2],
+        exp(confint(log_min_unm_2))[2,1],
+        exp(confint(log_min_unm_2))[2,2],
+        exp(confint(log_min_unm_2, level=0.997))[2,1],
+        exp(confint(log_min_unm_2, level=0.997))[2,2],
+        length(log_min_unm_2$residuals)),
+  
+  # Unmet mental care
+  cbind("Unmet mental care", "Health care", "All children (FE only)",
+        exp(coef(log_min_men_1))[2],
+        exp(confint(log_min_men_1))[2,1],
+        exp(confint(log_min_men_1))[2,2],
+        exp(confint(log_min_men_1, level=0.997))[2,1],
+        exp(confint(log_min_men_1, level=0.997))[2,2],
+        length(log_min_men_1$residuals)),
+  
+  cbind("Unmet mental care", "Health care", "All children (fully adjusted)",
+        exp(coef(log_min_men_2))[2],
+        exp(confint(log_min_men_2))[2,1],
+        exp(confint(log_min_men_2))[2,2],
+        exp(confint(log_min_men_2, level=0.997))[2,1],
+        exp(confint(log_min_men_2, level=0.997))[2,2],
+        length(log_min_men_2$residuals)),
+  
+  # 7+ school absences
+  cbind("7+ school absences", "School & Work", "All children (FE only)",
+        exp(coef(log_min_sch_1))[2],
+        exp(confint(log_min_sch_1))[2,1],
+        exp(confint(log_min_sch_1))[2,2],
+        exp(confint(log_min_sch_1, level=0.997))[2,1],
+        exp(confint(log_min_sch_1, level=0.997))[2,2],
+        length(log_min_sch_1$residuals)),
+  
+  cbind("7+ school absences", "School & Work", "All children (fully adjusted)",
+        exp(coef(log_min_sch_2))[2],
+        exp(confint(log_min_sch_2))[2,1],
+        exp(confint(log_min_sch_2))[2,2],
+        exp(confint(log_min_sch_2, level=0.997))[2,1],
+        exp(confint(log_min_sch_2, level=0.997))[2,2],
+        length(log_min_sch_2$residuals)),
+  
+  # Child employment
+  cbind("Child employment", "School & Work", "All children (FE only)",
+        exp(coef(log_min_job_1))[2],
+        exp(confint(log_min_job_1))[2,1],
+        exp(confint(log_min_job_1))[2,2],
+        exp(confint(log_min_job_1, level=0.997))[2,1],
+        exp(confint(log_min_job_1, level=0.997))[2,2],
+        length(log_min_job_1$residuals)),
+  
+  cbind("Child employment", "School & Work", "All children (fully adjusted)",
+        exp(coef(log_min_job_2))[2],
+        exp(confint(log_min_job_2))[2,1],
+        exp(confint(log_min_job_2))[2,2],
+        exp(confint(log_min_job_2, level=0.997))[2,1],
+        exp(confint(log_min_job_2, level=0.997))[2,2],
+        length(log_min_job_2$residuals))
 ))
-colnames(main_vals) <- c("Outcome", "Category", "Sample", "effect", "se")
 
-# Reorder factor variables
-main_vals$Outcome <- factor(main_vals$Outcome, levels=c("Sad or hopeless", "Considered suicide", "Attempted suicide", "Physical fight", "Recent alcohol", "Recent marijuana"))
-main_vals$Category <- factor(main_vals$Category, levels=c("Diagnoses", "Symptoms", "Health care", "Life"))
-main_vals$Sample <- factor(main_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Black or Hispanic/Latino", "All children (2020 dollars)", "All children (lagged wage)"))
+# Name columns
+colnames(log_df) <- c("Outcome", "Category", "Sample", "or",
+                      "conf_95_low", "conf_95_high", "conf_997_low", "conf_997_high", "n")
+
+# Reorder outcomes
+log_df$Outcome <- factor(
+  log_df$Outcome, levels=c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Any unmet care", "Unmet mental care", "7+ school absences", "Child employment"))
+
+# Reorder categories
+log_df$Category <- factor(
+  log_df$Category, levels=c("Diagnoses", "Sx.", "Health care", "School & Work"))
+
+# Reorder samples
+log_df$Sample <- factor(log_df$Sample, levels=c("All children (FE only)",
+                                                "All children (fully adjusted)"))
 
 # Treat columns as numeric
-main_vals$effect <- as.numeric(main_vals$effect)
-main_vals$se     <- as.numeric(main_vals$se)
+log_df$or            <- as.numeric(log_df$or)
+log_df$conf_95_low   <- as.numeric(log_df$conf_95_low)
+log_df$conf_95_high  <- as.numeric(log_df$conf_95_high)
+log_df$conf_997_low  <- as.numeric(log_df$conf_997_low)
+log_df$conf_997_high <- as.numeric(log_df$conf_997_high)
+log_df$n             <- as.numeric(log_df$n)
 
-# Generate coefficient plot
-plot_main <- ggplot(subset(main_vals, Sample %in% c("All children (unadjusted)",
-                                                    "All children (adjusted)")),
-                    aes(x=Outcome, y=effect, group=Sample, color=Sample)) +
+# Get min. and max. N
+min(log_df$n); max(log_df$n)
+
+# Generate coefficient plot: Logistic
+plot_log <- ggplot(log_df, aes(x=Outcome, y=or, group=Sample, color=Sample)) +
+  geom_hline(yintercept=0, color="black", linewidth=0.25) +
   geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
-  scale_shape_manual(values = 1:nlevels(main_vals$Sample)) +
-  geom_errorbar(aes(ymin=effect-1.96*se, ymax=effect+1.96*se),
-                position = position_dodge(width=0.6), width=0.4) +
-  ylab("Effect of $1 increase in minimum wage\non mental health outcomes") +
+  scale_shape_manual(values = 1:nlevels(log_df$Sample)) +
+  geom_errorbar(aes(ymin=conf_95_low, ymax=conf_95_high),
+                position = position_dodge(width=0.6), width=0, linewidth=0.8) +
+  geom_errorbar(aes(ymin=conf_997_low, ymax=conf_997_high),
+                position = position_dodge(width=0.6), width=0.3, alpha=0.5) +
+  ylab("Association of $1 increase in min. wage\nwith children's mental health") +
+  ggtitle("All children (3-17), 2016-2020") +
   theme_test() +
-  theme(legend.position = "right",
+  theme(legend.position = "bottom",
         text = element_text(size = 10, face = "bold"),
         axis.text.x = element_text(angle=45, hjust=1, vjust=1),
         axis.title.x = element_blank(),
@@ -831,232 +1310,669 @@ plot_main <- ggplot(subset(main_vals, Sample %in% c("All children (unadjusted)",
         panel.grid.major.x = element_blank(),
         panel.grid.major.y = element_line(color="light gray", linewidth=0.5),
         panel.grid.minor.y = element_line(color="light gray", linewidth=0.25)) +
-  geom_hline(yintercept=0, color="black", linewidth=0.25) +
-  scale_y_continuous(limits = c(-0.05, 0.05),
-                     breaks = seq(-0.04, 0.04, 0.02),
-                     minor_breaks = seq(-0.05, 0.05, 0.01),
-                     labels = function(x) paste0(x*100," pp")) +
+  scale_y_continuous(trans = "log10", limits=c(0.25,4),
+                     labels=c("0.25", "0.5", "OR = 1", "2", "4"),
+                     breaks=c(0.25, 0.5, 1, 2, 4),
+                     minor_breaks = seq(0.25, 10, 0.25)) +
   scale_color_grey(start=0.7, end=0) +
-  ggtitle("Adolescents (12-18), 2001-2019") +
   facet_grid(~Category, scales="free", space="free_x")
 
 # Export figure
-ggsave(plot=plot_main, file="YRBS coefficient plot, main.pdf", width=4.75, height=4, units='in', dpi=600)
+ggsave(plot=plot_log, file="Exhibits/NSCH coefficient plot, logistic.pdf",
+       width=5, height=4, units='in', dpi=600)
 
 ##############################################################################
-# Effect of lifetime minimum wage on mental health outcomes
+# Robustness check: Lifetime minimum wage
 ##############################################################################
 
-# Models for sad and hopeless
+# Sad and hopeless
 life_min_sad_1 <- felm(sad_hopeless ~ wage_life |
                          age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
 life_min_sad_2 <- felm(sad_hopeless ~ wage_life +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
+                         age_2 + sex_2 + race_eth_2 + grade_2 +
+                         elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                          age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
-life_min_sad_7 <- felm(sad_hopeless ~ wage_life*race_eth_cat +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
-                         age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
 
-# Models for considered suicide
+# Considered suicide
 life_min_con_1 <- felm(cons_suicide ~ wage_life |
                          age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
 life_min_con_2 <- felm(cons_suicide ~ wage_life +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
+                         age_2 + sex_2 + race_eth_2 + grade_2 +
+                         elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                          age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
-life_min_con_7 <- felm(cons_suicide ~ wage_life*race_eth_cat +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
-                         age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
 
-# Models for attempted suicide
+# Attempted suicide
 life_min_att_1 <- felm(suicide_att ~ wage_life |
                          age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
 life_min_att_2 <- felm(suicide_att ~ wage_life +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
+                         age_2 + sex_2 + race_eth_2 + grade_2 +
+                         elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                          age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
-life_min_att_7 <- felm(suicide_att ~ wage_life*race_eth_cat +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
-                         age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
 
-# Models for physical fight
-life_min_fgh_1 <- felm(fight ~ wage_life |
-                         age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
-life_min_fgh_2 <- felm(fight ~ wage_life +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
-                         age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
-life_min_fgh_7 <- felm(fight ~ wage_life*race_eth_cat +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
-                         age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
-
-# Recent alcohol use
+# Recent alcohol
 life_min_alc_1 <- felm(alcohol ~ wage_life |
                          age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
 life_min_alc_2 <- felm(alcohol ~ wage_life +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
+                         age_2 + sex_2 + race_eth_2 + grade_2 +
+                         elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                          age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
-life_min_alc_7 <- felm(alcohol ~ wage_life*race_eth_cat +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
-                         age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
 
 # Recent marijuana use
 life_min_mjn_1 <- felm(marijuana ~ wage_life |
                          age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
 life_min_mjn_2 <- felm(marijuana ~ wage_life +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
+                         age_2 + sex_2 + race_eth_2 + grade_2 +
+                         elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                          age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
-life_min_mjn_7 <- felm(marijuana ~ wage_life*race_eth_cat +
-                         age_2 + sex_2 + race_eth_2 + grade_2 |
-                         age_year + fipsst | 0 | cluster,
-                       data    = merged_sub,
-                       weights = merged_sub$weight_2)
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
 
-# Get range of sample sizes
-list <- cbind(
-  # Sad or hopeless
-  length(life_min_sad_1$residuals), length(life_min_sad_2$residuals),
-  length(life_min_sad_7$residuals),
-  
-  # Considered suicide
-  length(life_min_con_1$residuals), length(life_min_con_2$residuals),
-  length(life_min_con_7$residuals),
-  
-  # Attempted suicide
-  length(life_min_att_1$residuals), length(life_min_att_2$residuals),
-  length(life_min_att_7$residuals),
-  
-  # Physical fight
-  length(life_min_fgh_1$residuals), length(life_min_fgh_2$residuals),
-  length(life_min_fgh_7$residuals),
-  
-  # Recent alcohol use
-  length(life_min_alc_1$residuals), length(life_min_alc_2$residuals),
-  length(life_min_alc_7$residuals),
-  
-  # Recent marijuana use
-  length(life_min_mjn_1$residuals), length(life_min_mjn_2$residuals),
-  length(life_min_mjn_7$residuals)
+# Physical fight
+life_min_fgh_1 <- felm(fight ~ wage_life |
+                         age_year + fipsst | 0 | cluster,
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
+life_min_fgh_2 <- felm(fight ~ wage_life +
+                         age_2 + sex_2 + race_eth_2 + grade_2 +
+                         elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                         age_year + fipsst | 0 | cluster,
+                       data    = yrbs_all_model,
+                       weights = yrbs_all_model$weight_2)
+
+# Get values from models
+life_df <- NULL
+
+# Adolescents (FE only)
+life_df <- make_coef_df(life_df, life_min_sad_1, "Adolescents (FE only)")
+life_df <- make_coef_df(life_df, life_min_con_1, "Adolescents (FE only)")
+life_df <- make_coef_df(life_df, life_min_att_1, "Adolescents (FE only)")
+life_df <- make_coef_df(life_df, life_min_alc_1, "Adolescents (FE only)")
+life_df <- make_coef_df(life_df, life_min_mjn_1, "Adolescents (FE only)")
+life_df <- make_coef_df(life_df, life_min_fgh_1, "Adolescents (FE only)")
+
+# Adolescents (fully adjusted)
+life_df <- make_coef_df(life_df, life_min_sad_2, "Adolescents (fully adjusted)")
+life_df <- make_coef_df(life_df, life_min_con_2, "Adolescents (fully adjusted)")
+life_df <- make_coef_df(life_df, life_min_att_2, "Adolescents (fully adjusted)")
+life_df <- make_coef_df(life_df, life_min_alc_2, "Adolescents (fully adjusted)")
+life_df <- make_coef_df(life_df, life_min_mjn_2, "Adolescents (fully adjusted)")
+life_df <- make_coef_df(life_df, life_min_fgh_2, "Adolescents (fully adjusted)")
+
+# Clean dataframe of coefficients
+life_df <- clean_coef_df(life_df)
+
+# Get min. and max. N
+min(life_df$n); max(life_df$n)
+
+# Generate coefficient plot: Lifetime wage
+plot_life <- print_coef_plot(
+  life_df,
+  Y_TITLE    = "Association of $1 increase in lifetime\nmin. wage with adolescents' mental health",
+  Y_MIN      = -0.06,
+  Y_MAX      =  0.06,
+  COLORS     = "Standard"
 )
-min(list); max(list)
 
-# Extract coefficients of interest
-main_vals <- as.data.frame(rbind(
-  # Sad or hopeless
-  cbind("Sad or hopeless", "All children (unadjusted)",
-        life_min_sad_1$coefficients[1], life_min_sad_1$cse[1]),
-  cbind("Sad or hopeless", "All children (adjusted)",
-        life_min_sad_2$coefficients[1], life_min_sad_2$cse[1]),
-  cbind("Sad or hopeless", "Black or Hispanic/Latino",
-        life_min_sad_7$coefficients[1], life_min_sad_7$cse[1]),
-  
-  # Considered suicide
-  cbind("Considered suicide", "All children (unadjusted)",
-        life_min_con_1$coefficients[1], life_min_con_1$cse[1]),
-  cbind("Considered suicide", "All children (adjusted)",
-        life_min_con_2$coefficients[1], life_min_con_2$cse[1]),
-  cbind("Considered suicide", "Black or Hispanic/Latino",
-        life_min_con_7$coefficients[1], life_min_con_7$cse[1]),
-  
-  # Attempted suicide
-  cbind("Attempted suicide", "All children (unadjusted)",
-        life_min_att_1$coefficients[1], life_min_att_1$cse[1]),
-  cbind("Attempted suicide", "All children (adjusted)",
-        life_min_att_2$coefficients[1], life_min_att_2$cse[1]),
-  cbind("Attempted suicide", "Black or Hispanic/Latino",
-        life_min_att_7$coefficients[1], life_min_att_7$cse[1]),
-  
-  # Physical fight
-  cbind("Physical fight", "All children (unadjusted)",
-        life_min_fgh_1$coefficients[1], life_min_fgh_1$cse[1]),
-  cbind("Physical fight", "All children (adjusted)",
-        life_min_fgh_2$coefficients[1], life_min_fgh_2$cse[1]),
-  cbind("Physical fight", "Black or Hispanic/Latino",
-        life_min_fgh_7$coefficients[1], life_min_fgh_7$cse[1]),
-  
-  # Recent alcohol use
-  cbind("Recent alcohol", "All children (unadjusted)",
-        life_min_alc_1$coefficients[1], life_min_alc_1$cse[1]),
-  cbind("Recent alcohol", "All children (adjusted)",
-        life_min_alc_2$coefficients[1], life_min_alc_2$cse[1]),
-  cbind("Recent alcohol", "Black or Hispanic/Latino",
-        life_min_alc_7$coefficients[1], life_min_alc_7$cse[1]),
-  
-  # Recent marijuana use
-  cbind("Recent marijuana", "All children (unadjusted)",
-        life_min_mjn_1$coefficients[1], life_min_mjn_1$cse[1]),
-  cbind("Recent marijuana", "All children (adjusted)",
-        life_min_mjn_2$coefficients[1], life_min_mjn_2$cse[1]),
-  cbind("Recent marijuana", "Black or Hispanic/Latino",
-        life_min_mjn_7$coefficients[1], life_min_mjn_7$cse[1])
-))
-colnames(main_vals) <- c("Outcome", "Sample", "effect", "se")
+# Export figure
+ggsave(plot=plot_life, file="Exhibits/YRBS coefficient plot, lifetime.pdf",
+       width=5, height=4, units='in', dpi=600)
 
-# Reorder factor variables
-main_vals$Outcome <- factor(main_vals$Outcome, levels=c("Sad or hopeless", "Considered suicide", "Attempted suicide", "Physical fight", "Recent alcohol", "Recent marijuana"))
-main_vals$Sample <- factor(main_vals$Sample, levels=c("All children (unadjusted)", "All children (adjusted)", "Black or Hispanic/Latino"))
+##############################################################################
+# Robustness check: Cluster at state level
+##############################################################################
 
-# Treat columns as numeric
-main_vals$effect <- as.numeric(main_vals$effect)
-main_vals$se     <- as.numeric(main_vals$se)
+# Sad and hopeless
+model_min_sad_1c <- felm(sad_hopeless ~ Effective.Minimum.Wage |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+model_min_sad_2c <- felm(sad_hopeless ~ Effective.Minimum.Wage +
+                           age_2 + sex_2 + race_eth_2 + grade_2 +
+                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
 
-# Generate coefficient plot
-plot_main <- ggplot(main_vals, aes(x=Outcome, y=effect,
-                                   group=Sample, color=Sample)) +
-  geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
-  scale_shape_manual(values = 1:nlevels(main_vals$Sample)) +
-  geom_errorbar(aes(ymin=effect-1.96*se, ymax=effect+1.96*se),
-                position = position_dodge(width=0.6), width=0.4) +
-  ylab("Effect of $1 increase in minimum wage\non mental health outcomes") +
+# Considered suicide
+model_min_con_1c <- felm(cons_suicide ~ Effective.Minimum.Wage |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+model_min_con_2c <- felm(cons_suicide ~ Effective.Minimum.Wage +
+                           age_2 + sex_2 + race_eth_2 + grade_2 +
+                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+
+# Attempted suicide
+model_min_att_1c <- felm(suicide_att ~ Effective.Minimum.Wage |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+model_min_att_2c <- felm(suicide_att ~ Effective.Minimum.Wage +
+                           age_2 + sex_2 + race_eth_2 + grade_2 +
+                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+
+# Recent alcohol
+model_min_alc_1c <- felm(alcohol ~ Effective.Minimum.Wage |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+model_min_alc_2c <- felm(alcohol ~ Effective.Minimum.Wage +
+                           age_2 + sex_2 + race_eth_2 + grade_2 +
+                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+
+# Recent marijuana
+model_min_mjn_1c <- felm(marijuana ~ Effective.Minimum.Wage |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+model_min_mjn_2c <- felm(marijuana ~ Effective.Minimum.Wage +
+                           age_2 + sex_2 + race_eth_2 + grade_2 +
+                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+
+# Physical fight
+model_min_fgh_1c <- felm(fight ~ Effective.Minimum.Wage |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+model_min_fgh_2c <- felm(fight ~ Effective.Minimum.Wage +
+                           age_2 + sex_2 + race_eth_2 + grade_2 +
+                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                           age_year + fipsst | 0 | State,
+                         data    = yrbs_all_model,
+                         weights = yrbs_all_model$weight_2)
+
+# Get values from models
+clust_df <- NULL
+
+# Adolescents (FE only, state clust.)
+clust_df <- make_coef_df(clust_df, model_min_sad_1c, "Adolescents (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_con_1c, "Adolescents (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_att_1c, "Adolescents (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_alc_1c, "Adolescents (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_mjn_1c, "Adolescents (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_fgh_1c, "Adolescents (FE only, state clust.)")
+
+# Adolescents (fully adj., state clust.)
+clust_df <- make_coef_df(clust_df, model_min_sad_2c, "Adolescents (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_con_2c, "Adolescents (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_att_2c, "Adolescents (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_alc_2c, "Adolescents (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_mjn_2c, "Adolescents (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_fgh_2c, "Adolescents (fully adj., state clust.)")
+
+# Add main models for comparison
+# Adolescents (FE only, nested clust.)
+clust_df <- make_coef_df(clust_df, model_min_sad_1, "Adolescents (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_con_1, "Adolescents (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_att_1, "Adolescents (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_alc_1, "Adolescents (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_mjn_1, "Adolescents (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_fgh_1, "Adolescents (FE only, nested clust.)")
+
+# Adolescents (fully adj., nested clust.)
+clust_df <- make_coef_df(clust_df, model_min_sad_2, "Adolescents (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_con_2, "Adolescents (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_att_2, "Adolescents (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_alc_2, "Adolescents (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_mjn_2, "Adolescents (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_fgh_2, "Adolescents (fully adj., nested clust.)")
+
+# Clean dataframe of coefficients
+clust_df <- clean_coef_df(clust_df)
+
+# Get min. and max. N
+min(clust_df$n); max(clust_df$n)
+
+# Generate coefficient plot: State clusters
+plot_clust <- print_coef_plot(
+  clust_df,
+  Y_TITLE    = "Association of $1 increase in min. wage\nwith adolescents' mental health",
+  Y_MIN      = -0.045,
+  Y_MAX      =  0.045,
+  COLORS     = "Standard"
+)
+
+# Adjust legend
+plot_clust <- plot_clust + guides(shape = guide_legend(nrow = 2))
+
+# Export figure
+ggsave(plot=plot_clust, file="Exhibits/YRBS coefficient plot, state clusters.pdf",
+       width=7, height=4, units='in', dpi=600)
+
+##############################################################################
+# Event studies: Minimum wage and mental health
+##############################################################################
+
+# Define treated and control states
+TREATED <- c("AR","DE","FL","HI","MD","MO","MT","NE","NJ","NY","SD","WV")
+CONTROL <- c("AL","GA","IA","ID","KS","KY","LA","MS","NC","ND","NH",
+             "NV","OK","PA","SC","TN","TX","UT","VA","WI","WY")
+TREATED_2 <- cdlTools::fips(TREATED, to="FIPS")
+CONTROL_2 <- cdlTools::fips(CONTROL, to="FIPS")
+
+# Subset minimum wage df to treated state-years
+min_wage_event <- subset(min_wage_df, fipsst %in% c(CONTROL_2, TREATED_2) &
+                           year %in% c(2011:2019))
+
+# Define treated year
+min_wage_event <- min_wage_event %>% mutate(
+  treated_year = case_when(
+    fipsst %in% c(12) ~ 2012,
+    fipsst %in% c(29) ~ 2013,
+    fipsst %in% c(10,30,34,36) ~ 2014,
+    fipsst %in% c(5,15,24,31,46,54) ~ 2015
+  ))
+
+min_wage_event$period <- min_wage_event$year - min_wage_event$treated_year
+
+# Graph minimum wages of treated states
+ggplot(subset(min_wage_event, fipsst %in% TREATED_2),
+       aes(x=period, y=Effective.Minimum.Wage)) +
+  geom_hline(yintercept=7.25, color="black") +
+  #geom_vline(xintercept=-0.5, color="black", linetype="dashed") +
+  geom_line(aes(group=State)) +
   theme_test() +
+  ylab("Effective minimum wage") +
+  xlab("Year relative to raise\nabove federal minimum wage") +
   theme(legend.position = "right",
         text = element_text(size = 10, face = "bold"),
-        axis.text.x = element_text(angle=45, hjust=1, vjust=1),
-        axis.title.x = element_blank(),
         axis.ticks = element_blank(),
-        strip.background = element_blank(),
-        legend.title = element_blank(),
         panel.grid.major.x = element_blank(),
         panel.grid.major.y = element_line(color="light gray", linewidth=0.5),
         panel.grid.minor.y = element_line(color="light gray", linewidth=0.25)) +
-  geom_hline(yintercept=0, color="black", linewidth=0.25) +
-  scale_y_continuous(limits = c(-0.05, 0.05),
-                     breaks = seq(-0.04, 0.04, 0.02),
-                     minor_breaks = seq(-0.05, 0.05, 0.01),
-                     labels = function(x) paste0(x*100," pp")) +
-  scale_color_grey(start=0, end=0.7) +
-  ggtitle("Adolescents (12-18), 2001-2019, lifetime wage")
+  scale_y_continuous(limits = c(6,12),
+                     breaks = seq(0, 12, 1),
+                     minor_breaks = seq(0, 12, 0.5),
+                     labels = function(x) paste0("$",x)) +
+  scale_x_continuous(limits = c(-4,6),
+                     breaks = seq(-10,2019,1)) #+
+  facet_wrap(.~treated_year)#+
+# scale_x_continuous(breaks = seq(2011,2019,1)) +
+# annotate("text", x=-0.25, y=11.75, label="Raised above federal min. wage",
+#          fontface=2, size=3, hjust=0, vjust=0.5) +
+# annotate("text", x=7, y=7.5, label="Federal minimum wage",
+#          fontface=2, size=3, hjust=1, vjust=0.5)
+
+
+
+
+
+# # Define years in study period
+# FIRST_YEAR <- 2011
+# LAST_YEAR  <- 2019
+# 
+# # Subset minimum wage dataset to study years
+# # After federal minimum raised in ~2009
+# min_wage_sub <- subset(min_wage_df, year %in% c(FIRST_YEAR:LAST_YEAR))
+# 
+# # Reorder dataset
+# min_wage_sub <- min_wage_sub %>% arrange(State, Year)
+# 
+# # Get first year above federal minimum
+# temp_df <- min_wage_sub %>%
+#   group_by(fipsst) %>%
+#   filter(above_fed == 1) %>%
+#   slice_head(n = 1)
+# temp_df$first_above <- temp_df$Year
+# 
+# # Take only state and first_above
+# temp_df <- temp_df %>% select(fipsst, first_above)
+# 
+# # Treat FIPS as factor
+# temp_df$fipsst <- as.factor(temp_df$fipsst)
+# 
+# # Merge back into main dataframe
+# yrbs_all_model <- left_join(yrbs_all_model, temp_df, by="fipsst")
+# 
+# # Subset full dataset to study years
+# yrbs_all_sub <- subset(yrbs_all_model, year %in% c(FIRST_YEAR:LAST_YEAR))
+# 
+# # Coarsen treatment years
+# # If no YRBS in that year, change to next year
+# yrbs_all_sub <- yrbs_all_sub %>% mutate(
+#   first_above_coarse = case_when(
+#     
+#     # For odd years, leave alone
+#     first_above %% 2 == 1 ~ first_above,
+#     
+#     # For even years, add one
+#     # For example, 2012 becomes 2013
+#     first_above %% 2 == 0 ~ first_above + 1
+#   ))
+# 
+# 
+# table(yrbs_all_sub$st_abbr.x, yrbs_all_sub$first_above, useNA="always")
+
+
+
+# # Generate sampling clusters
+# # yrbs_all_sub$cluster <- paste0(yrbs_all_sub$fipsst, "-", yrbs_all_sub$PSU, "-", yrbs_all_sub$stratum)
+# yrbs_all_sub$cluster <- paste0(yrbs_all_sub$fipsst, "-", yrbs_all_sub$stratum)
+# 
+# # Generate age-by-year fixed effects
+# yrbs_all_sub$age_year <- paste0(yrbs_all_sub$age_2, "-", yrbs_all_sub$year)
+
+
+
+
+
+# # Treat cluster as numeric
+# yrbs_all_sub$cluster_num <- as.numeric(as.factor(yrbs_all_sub$cluster))
+# 
+# # Define period for Callaway and Sant'Anna
+# yrbs_all_sub <- yrbs_all_sub %>% mutate(
+#   period_cs = case_when(
+#     
+#     # Exclude states already above federal minimum
+#     first_above == FIRST_YEAR ~ NA_real_,
+#     
+#     # Code control states as 0
+#     is.na(first_above_coarse) ~ 0,
+#     
+#     # Otherwise use treatment year
+#     TRUE ~ first_above_coarse
+#   ))
+# 
+# # Subset to states of interest
+# yrbs_all_cs <- subset(yrbs_all_sub, !is.na(yrbs_all_sub$period_cs))
+
+
+
+
+
+
+
+
+# Load package
+library(did)
+
+# Subset to treated or control state-years
+yrbs_all_cs <- subset(yrbs_all_model, fipsst %in% c(CONTROL_2, TREATED_2) &
+                        year %in% c(2011:2019))
+
+# Define treated period
+yrbs_all_cs <- yrbs_all_cs %>% mutate(
+  period_cs = case_when(
+    fipsst %in% c(12,29) ~ 2013,
+    fipsst %in% c(10,30,34,36,5,15,24,31,46,54) ~ 2015,
+    fipsst %in% CONTROL_2 ~ 0
+  ))
+
+# Treat cluster as numeric
+yrbs_all_cs$cluster_num <- as.numeric(as.factor(yrbs_all_cs$cluster))
+
+# Set seed
+set.seed(1234)
+
+# Model: Sad and hopeless
+# Note: Subset to complete cases
+yrbs_all_cs_1 <- yrbs_all_cs %>%
+  filter_at(vars(sad_hopeless, Year, period_cs), all_vars(!is.na(.)))
+atts_1 <- att_gt(yname = "sad_hopeless",
+                 tname = "Year",
+                 gname = "period_cs",
+                 control_group = "nevertreated",
+                 clustervars   = "cluster_num",
+                 panel = FALSE,
+                 xformla = ~age_2 + sex_2 + race_eth_2 + grade_2,
+                 data = yrbs_all_cs_1,
+                 weightsname = "weight_2",
+                 allow_unbalanced_panel = TRUE,
+                 base_period = "universal",
+                 pl = TRUE,
+                 cores = 4,
+                 print_details = TRUE)
+
+# Model: Considered suicide
+# Note: Subset to complete cases
+yrbs_all_cs_2 <- yrbs_all_cs %>%
+  filter_at(vars(cons_suicide, Year, period_cs), all_vars(!is.na(.)))
+atts_2 <- att_gt(yname = "cons_suicide",
+                 tname = "Year",
+                 gname = "period_cs",
+                 control_group = "nevertreated",
+                 clustervars   = "cluster_num",
+                 panel = FALSE,
+                 xformla = ~age_2 + sex_2 + race_eth_2 + grade_2,
+                 data = yrbs_all_cs_2,
+                 weightsname = "weight_2",
+                 allow_unbalanced_panel = TRUE,
+                 base_period = "universal",
+                 pl = TRUE,
+                 cores = 4,
+                 print_details = TRUE)
+
+# Model: Attempted suicide
+# Note: Subset to complete cases
+yrbs_all_cs_3 <- yrbs_all_cs %>%
+  filter_at(vars(suicide_att, Year, period_cs), all_vars(!is.na(.)))
+atts_3 <- att_gt(yname = "suicide_att",
+                 tname = "Year",
+                 gname = "period_cs",
+                 control_group = "nevertreated",
+                 clustervars   = "cluster_num",
+                 panel = FALSE,
+                 xformla = ~age_2 + sex_2 + race_eth_2 + grade_2,
+                 data = yrbs_all_cs_3,
+                 weightsname = "weight_2",
+                 allow_unbalanced_panel = TRUE,
+                 base_period = "universal",
+                 pl = TRUE,
+                 cores = 4,
+                 print_details = TRUE)
+
+# Model: Physical fight
+# Note: Subset to complete cases
+yrbs_all_cs_4 <- yrbs_all_cs %>%
+  filter_at(vars(fight, Year, period_cs), all_vars(!is.na(.)))
+atts_4 <- att_gt(yname = "fight",
+                 tname = "Year",
+                 gname = "period_cs",
+                 control_group = "nevertreated",
+                 clustervars   = "cluster_num",
+                 panel = FALSE,
+                 xformla = ~age_2 + sex_2 + race_eth_2 + grade_2,
+                 data = yrbs_all_cs_4,
+                 weightsname = "weight_2",
+                 allow_unbalanced_panel = TRUE,
+                 base_period = "universal",
+                 pl = TRUE,
+                 cores = 4,
+                 print_details = TRUE)
+
+# Model: Recent alcohol use
+# Note: Subset to complete cases
+yrbs_all_cs_5 <- yrbs_all_cs %>%
+  filter_at(vars(alcohol, Year, period_cs), all_vars(!is.na(.)))
+atts_5 <- att_gt(yname = "alcohol",
+                 tname = "Year",
+                 gname = "period_cs",
+                 control_group = "nevertreated",
+                 clustervars   = "cluster_num",
+                 panel = FALSE,
+                 xformla = ~age_2 + sex_2 + race_eth_2 + grade_2,
+                 data = yrbs_all_cs_5,
+                 weightsname = "weight_2",
+                 allow_unbalanced_panel = TRUE,
+                 base_period = "universal",
+                 pl = TRUE,
+                 cores = 4,
+                 print_details = TRUE)
+
+# Model: Recent marijuana use
+# Note: Subset to complete cases
+yrbs_all_cs_6 <- yrbs_all_cs %>%
+  filter_at(vars(marijuana, Year, period_cs), all_vars(!is.na(.)))
+atts_6 <- att_gt(yname = "marijuana",
+                 tname = "Year",
+                 gname = "period_cs",
+                 control_group = "nevertreated",
+                 clustervars   = "cluster_num",
+                 panel = FALSE,
+                 xformla = ~age_2 + sex_2 + race_eth_2 + grade_2,
+                 data = yrbs_all_cs_6,
+                 weightsname = "weight_2",
+                 allow_unbalanced_panel = TRUE,
+                 base_period = "universal",
+                 pl = TRUE,
+                 cores = 4,
+                 print_details = TRUE)
+
+# Generate aggregate event studies
+agg_event_1 <- aggte(atts_1, type = "dynamic")
+agg_event_2 <- aggte(atts_2, type = "dynamic")
+agg_event_3 <- aggte(atts_3, type = "dynamic")
+agg_event_4 <- aggte(atts_4, type = "dynamic")
+agg_event_5 <- aggte(atts_5, type = "dynamic")
+agg_event_6 <- aggte(atts_6, type = "dynamic")
+summary(agg_event_1); summary(agg_event_2); summary(agg_event_3)
+summary(agg_event_4); summary(agg_event_5); summary(agg_event_6)
+
+# Plot event-study coefficients
+event_plot_1 <- ggdid(agg_event_1) +
+  geom_vline(xintercept=-1, color="black", linetype="dashed") +
+  geom_hline(yintercept=0, color="black") +
+  geom_errorbar(width=0.2) +
+  geom_point() +
+  geom_line() +
+  theme_test() +
+  theme(plot.title         = element_blank(),
+        legend.position    = "none",
+        text               = element_text(size = 10, face = "bold"),
+        axis.ticks         = element_blank(),
+        panel.grid.major.y = element_line(color = "gray", size = 0.25)) +
+  xlab("Year relative to raise") +
+  ylab("Adj. coefficients for\nsad and hopeless") +
+  scale_y_continuous(labels = function(x) paste0(x*100," pp")) +
+  scale_x_continuous(breaks=seq(-4,6,2)) +
+  coord_cartesian(ylim=c(-0.1,0.1)) +
+  annotate("text", x=-0.5, y=0.075, label="Raised above\nfederal min. wage",
+           fontface=2, size=3, hjust=0, vjust=0.5)
+
+event_plot_2 <- ggdid(agg_event_2) +
+  geom_vline(xintercept=-1, color="black", linetype="dashed") +
+  geom_hline(yintercept=0, color="black") +
+  geom_errorbar(width=0.2) +
+  geom_point() +
+  geom_line() +
+  theme_test() +
+  theme(plot.title         = element_blank(),
+        legend.position    = "none",
+        text               = element_text(size = 10, face = "bold"),
+        axis.ticks         = element_blank(),
+        panel.grid.major.y = element_line(color = "gray", size = 0.25)) +
+  xlab("Year relative to raise") +
+  ylab("Adj. coefficients for\nconsidered suicide") +
+  scale_y_continuous(labels = function(x) paste0(x*100," pp")) +
+  scale_x_continuous(breaks=seq(-4,6,2)) +
+  coord_cartesian(ylim=c(-0.1,0.1))
+
+event_plot_3 <- ggdid(agg_event_3) +
+  geom_vline(xintercept=-1, color="black", linetype="dashed") +
+  geom_hline(yintercept=0, color="black") +
+  geom_errorbar(width=0.2) +
+  geom_point() +
+  geom_line() +
+  theme_test() +
+  theme(plot.title         = element_blank(),
+        legend.position    = "none",
+        text               = element_text(size = 10, face = "bold"),
+        axis.ticks         = element_blank(),
+        panel.grid.major.y = element_line(color = "gray", size = 0.25)) +
+  xlab("Year relative to raise") +
+  ylab("Adj. coefficients for\nattempting suicide") +
+  scale_y_continuous(labels = function(x) paste0(x*100," pp")) +
+  scale_x_continuous(breaks=seq(-4,6,2)) +
+  coord_cartesian(ylim=c(-0.1,0.1))
+
+event_plot_4 <- ggdid(agg_event_4) +
+  geom_vline(xintercept=-1, color="black", linetype="dashed") +
+  geom_hline(yintercept=0, color="black") +
+  geom_errorbar(width=0.2) +
+  geom_point() +
+  geom_line() +
+  theme_test() +
+  theme(plot.title         = element_blank(),
+        legend.position    = "none",
+        text               = element_text(size = 10, face = "bold"),
+        axis.ticks         = element_blank(),
+        panel.grid.major.y = element_line(color = "gray", size = 0.25)) +
+  xlab("Year relative to raise") +
+  ylab("Adj. coefficients for\nphysical fight") +
+  scale_y_continuous(labels = function(x) paste0(x*100," pp")) +
+  scale_x_continuous(breaks=seq(-4,6,2)) +
+  coord_cartesian(ylim=c(-0.1,0.1))
+
+event_plot_5 <- ggdid(agg_event_5) +
+  geom_vline(xintercept=-1, color="black", linetype="dashed") +
+  geom_hline(yintercept=0, color="black") +
+  geom_errorbar(width=0.2) +
+  geom_point() +
+  geom_line() +
+  theme_test() +
+  theme(plot.title         = element_blank(),
+        legend.position    = "none",
+        text               = element_text(size = 10, face = "bold"),
+        axis.ticks         = element_blank(),
+        panel.grid.major.y = element_line(color = "gray", size = 0.25)) +
+  xlab("Year relative to raise") +
+  ylab("Adj. coefficients for\nrecent alcohol use") +
+  scale_y_continuous(labels = function(x) paste0(x*100," pp")) +
+  scale_x_continuous(breaks=seq(-4,6,2)) +
+  coord_cartesian(ylim=c(-0.1,0.1))
+
+event_plot_6 <- ggdid(agg_event_6) +
+  geom_vline(xintercept=-1, color="black", linetype="dashed") +
+  geom_hline(yintercept=0, color="black") +
+  geom_errorbar(width=0.2) +
+  geom_point() +
+  geom_line() +
+  theme_test() +
+  theme(plot.title         = element_blank(),
+        legend.position    = "none",
+        text               = element_text(size = 10, face = "bold"),
+        axis.ticks         = element_blank(),
+        panel.grid.major.y = element_line(color = "gray", size = 0.25)) +
+  xlab("Year relative to raise") +
+  ylab("Adj. coefficients for\nrecent marijuana use") +
+  scale_y_continuous(labels = function(x) paste0(x*100," pp")) +
+  scale_x_continuous(breaks=seq(-4,6,2)) +
+  coord_cartesian(ylim=c(-0.1,0.1))
+
+# Compile figures
+event_all <- plot_grid(event_plot_1, event_plot_2, event_plot_3,
+                       event_plot_4, event_plot_5, event_plot_6, nrow=3)
 
 # Export figure
-ggsave(plot=plot_main, file="YRBS coefficient plot, lifetime.pdf", width=5, height=4, units='in', dpi=600)
+ggsave(plot=event_all, file="Exhibits/YRBS event studies, nested errors.pdf",
+       width=6, height=6, units='in', dpi=600)
