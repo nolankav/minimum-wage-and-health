@@ -362,7 +362,8 @@ summary(tableby(~ age_2 + sex_2 + race_eth_2 + grade_2,
                 yrbs_all_model, digits.pct=0, weights=weight_2), text=T)
 
 # Mental health outcomes: weighted
-summary(tableby(~ sad_hopeless + cons_suicide + suicide_att + alcohol + marijuana + fight,
+summary(tableby(~ sad_hopeless + cons_suicide + suicide_att +
+                  alcohol + marijuana + fight,
                 yrbs_all_model, digits.pct=0, weights=weight_2), text=T)
 
 ##############################################################################
