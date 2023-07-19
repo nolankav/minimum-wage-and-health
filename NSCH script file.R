@@ -1,7 +1,7 @@
 # Minimum wage and children's mental health
 # Analyses using the National Survey of Children's Health
 # N.M. Kavanagh, M. McConnell, N. Slopen
-# June 27, 2023
+# July 17, 2023
 
 # Please direct questions about this script file to nolankavanagh@fas.harvard.edu.
 
@@ -422,8 +422,14 @@ nsch_all <- nsch_all %>% mutate(
     TRUE ~ 0
   ))
 
+# Rescale weight so mean is 1
+nsch_all$weights <- nsch_all$fwc/1946.27
+
+# Generate nested sampling clusters
+nsch_all$cluster <- paste0(nsch_all$strata, "-", nsch_all$fipsst)
+
 ##############################################################################
-# Table 1: Demographic characteristics
+# Table: Demographic characteristics
 ##############################################################################
 
 # At least 1 outcome
@@ -435,245 +441,178 @@ nsch_all <- nsch_all %>% mutate(
   ))
 
 # Complete cases for covariates
-nsch_all_demo <- nsch_all %>%
+nsch_all_model <- nsch_all %>%
   subset(., age %in% c(3:17)) %>%
   filter_at(vars(Effective.Minimum.Wage, has_outcome, age, sex, race_eth,
                  family_struc, adult_edu, nativity), all_vars(!is.na(.)))
 
 # Child characteristics: unweighted
-# This line provides demographic characteristics without survey weights.
-summary(tableby(~ as.numeric(age) + sex + race_eth + family_struc + adult_edu + fpl_category + nativity,
-                nsch_all_demo, digits.pct=0), text=T)
+summary(tableby(~ as.numeric(age) + sex + race_eth + family_struc + adult_edu + nativity + fpl_category,
+                nsch_all_model, digits.pct=0), text=T)
 
 # Child characteristics: weighted
-# This line provides demographic characteristics with survey weights.
-summary(tableby(~ as.numeric(age) + sex + race_eth + family_struc + adult_edu + fpl_category + nativity,
-                nsch_all_demo, digits.pct=0, weights=fwc/1946.27), text=T)
+summary(tableby(~ as.numeric(age) + sex + race_eth + family_struc + adult_edu + nativity + fpl_category,
+                nsch_all_model, digits.pct=0, weights=fwc/1946.27), text=T)
+
+# Mental health outcomes: weighted
+summary(tableby(~ depression + anxiety + adhd + behavior + stomach_r +
+                  unmet_needs + unmet_mental + missed_school + child_job,
+                nsch_all_model, digits.pct=0, weights=weights), text=T)
 
 ##############################################################################
-# Specify complex design
+# Figure: Associations between FPL and mental health
 ##############################################################################
 
-# # Generate variable
-# nsch_all_demo$all <- 1
-
-# Rescale weight so mean is 1
-nsch_all_demo$weights <- nsch_all_demo$fwc/1946.27
-
-# Define complex sampling design
-# Nest strata within states and apply survey weights
-design_all <- svydesign(id=~fipsst, strata=~strata, nest=TRUE,
-                        weights=~fwc, data=nsch_all_demo)
-
-# Subset to children aged 3-17
-design_sub <- subset(design_all, age %in% c(3:17))
-
-##############################################################################
-# Figure 2: Associations between FPL and mental health
-##############################################################################
-
-# Explore unadjusted associations
-prop.table(svytable(~fpl_category + depression,    design=design_sub), 1)
-prop.table(svytable(~fpl_category + anxiety,       design=design_sub), 1)
-prop.table(svytable(~fpl_category + behavior,      design=design_sub), 1)
-prop.table(svytable(~fpl_category + adhd,          design=design_sub), 1)
-prop.table(svytable(~fpl_category + stomach_r,     design=design_sub), 1)
-prop.table(svytable(~fpl_category + unmet_needs,   design=design_sub), 1)
-prop.table(svytable(~fpl_category + unmet_mental,  design=design_sub), 1)
-prop.table(svytable(~fpl_category + missed_school, design=design_sub), 1)
-
-?svytable
-
-# Tables for unadjusted rates of outcomes
-table_all <- svyby(~depression + anxiety + adhd + behavior + stomach_r +
-                     unmet_needs + unmet_mental + missed_school + child_job,
-                   ~all, design_sub, svymean, na.rm=TRUE, vartype="ci")
-table_fpl <- svyby(~depression + anxiety + adhd + behavior + stomach_r +
-                     unmet_needs + unmet_mental + missed_school + child_job,
-                   ~fpl_category, design_sub, svymean, na.rm=TRUE, vartype="ci")
+# Reset reference FPL category
+nsch_all_model$fpl_category <- factor(nsch_all_model$fpl_category, levels = c("400% or greater", "Less than 100%", "100% to 199%", "200% to 299%", "300% to 399%"))
 
 # Depression
-model_fpl_dep <- svyglm(depression ~ fpl_category +
-                          age + sex + race_eth + family_struc + adult_edu + nativity +
-                          year + fipsst,
-                        design = design_sub)
+model_fpl_dep <- felm(depression ~ fpl_category + 
+                        age + sex + race_eth + family_struc + adult_edu + nativity |
+                        year + fipsst | 0 | fipsst,
+                      data    = nsch_all_model,
+                      weights = nsch_all_model$weights)
 
 # Anxiety
-model_fpl_anx <- svyglm(anxiety ~ fpl_category +
-                          age + sex + race_eth + family_struc + adult_edu + nativity +
-                          year + fipsst,
-                        design = design_sub)
+model_fpl_anx <- felm(anxiety ~ fpl_category + 
+                        age + sex + race_eth + family_struc + adult_edu + nativity |
+                        year + fipsst | 0 | fipsst,
+                      data    = nsch_all_model,
+                      weights = nsch_all_model$weights)
 
 # ADD/ADHD
-model_fpl_add <- svyglm(adhd ~ fpl_category +
-                          age + sex + race_eth + family_struc + adult_edu + nativity +
-                          year + fipsst,
-                        design = design_sub)
+model_fpl_add <- felm(adhd ~ fpl_category + 
+                        age + sex + race_eth + family_struc + adult_edu + nativity |
+                        year + fipsst | 0 | fipsst,
+                      data    = nsch_all_model,
+                      weights = nsch_all_model$weights)
 
 # Behavioral problems
-model_fpl_beh <- svyglm(behavior ~ fpl_category +
-                          age + sex + race_eth + family_struc + adult_edu + nativity +
-                          year + fipsst,
-                        design = design_sub)
+model_fpl_beh <- felm(behavior ~ fpl_category + 
+                        age + sex + race_eth + family_struc + adult_edu + nativity |
+                        year + fipsst | 0 | fipsst,
+                      data    = nsch_all_model,
+                      weights = nsch_all_model$weights)
 
 # Digestive issues
-model_fpl_dig <- svyglm(stomach_r ~ fpl_category +
-                          age + sex + race_eth + family_struc + adult_edu + nativity +
-                          year + fipsst,
-                        design = design_sub)
+model_fpl_dig <- felm(stomach_r ~ fpl_category + 
+                        age + sex + race_eth + family_struc + adult_edu + nativity |
+                        year + fipsst | 0 | fipsst,
+                      data    = nsch_all_model,
+                      weights = nsch_all_model$weights)
 
 # Any unmet care
-model_fpl_unm <- svyglm(unmet_needs ~ fpl_category +
-                          age + sex + race_eth + family_struc + adult_edu + nativity +
-                          year + fipsst,
-                        design = design_sub)
+model_fpl_unm <- felm(unmet_needs ~ fpl_category + 
+                        age + sex + race_eth + family_struc + adult_edu + nativity |
+                        year + fipsst | 0 | fipsst,
+                      data    = nsch_all_model,
+                      weights = nsch_all_model$weights)
 
 # Unmet mental care
-model_fpl_men <- svyglm(unmet_mental ~ fpl_category +
-                          age + sex + race_eth + family_struc + adult_edu + nativity +
-                          year + fipsst,
-                        design = design_sub)
+model_fpl_men <- felm(unmet_mental ~ fpl_category + 
+                        age + sex + race_eth + family_struc + adult_edu + nativity |
+                        year + fipsst | 0 | fipsst,
+                      data    = nsch_all_model,
+                      weights = nsch_all_model$weights)
 
 # 7+ school absences
-model_fpl_sch <- svyglm(missed_school ~ fpl_category +
-                          age + sex + race_eth + family_struc + adult_edu + nativity +
-                          year + fipsst,
-                        design = design_sub)
+model_fpl_sch <- felm(missed_school ~ fpl_category + 
+                        age + sex + race_eth + family_struc + adult_edu + nativity |
+                        year + fipsst | 0 | fipsst,
+                      data    = nsch_all_model,
+                      weights = nsch_all_model$weights)
 
 # Child employment
-model_fpl_job <- svyglm(child_job ~ fpl_category +
-                          age + sex + race_eth + family_struc + adult_edu + nativity +
-                          year + fipsst,
-                        design = design_sub)
-
-# Generate marginal means
-means_dep <- estimate_means(model_fpl_dep, at="fpl_category")
-means_anx <- estimate_means(model_fpl_anx, at="fpl_category")
-means_add <- estimate_means(model_fpl_add, at="fpl_category")
-means_beh <- estimate_means(model_fpl_beh, at="fpl_category")
-means_dig <- estimate_means(model_fpl_dig, at="fpl_category")
-means_unm <- estimate_means(model_fpl_unm, at="fpl_category")
-means_men <- estimate_means(model_fpl_men, at="fpl_category")
-means_sch <- estimate_means(model_fpl_sch, at="fpl_category")
-means_job <- estimate_means(model_fpl_job, at="fpl_category")
-
-?estimate_means
-
-# Tables for unadjusted rates of outcomes
-table_all <- svyby(~depression + anxiety + adhd + behavior + stomach_r +
-                     unmet_needs + unmet_mental + missed_school + child_job,
-                   ~all, design_sub, svymean, na.rm=TRUE, vartype="se")
-table_fpl <- svyby(~depression + anxiety + adhd + behavior + stomach_r +
-                     unmet_needs + unmet_mental + missed_school + child_job,
-                   ~fpl_category, design_sub, svymean, na.rm=TRUE, vartype="se")
+model_fpl_job <- felm(child_job ~ fpl_category + 
+                        age + sex + race_eth + family_struc + adult_edu + nativity |
+                        year + fipsst | 0 | fipsst,
+                      data    = nsch_all_model,
+                      weights = nsch_all_model$weights)
 
 # Dataframe of rates
 means_all <- as.data.frame(rbind(
   # Depression
-  cbind("Depression", "All children",    table_all$depression,    table_all$se.depression),
-  cbind("Depression", "Less than 100%",  table_fpl$depression[1], table_fpl$se.depression[1]),
-  cbind("Depression", "100% to 199%",    table_fpl$depression[2], table_fpl$se.depression[2]),
-  cbind("Depression", "200% to 299%",    table_fpl$depression[3], table_fpl$se.depression[3]),
-  cbind("Depression", "300% to 399%",    table_fpl$depression[4], table_fpl$se.depression[4]),
-  cbind("Depression", "400% or greater", table_fpl$depression[5], table_fpl$se.depression[5]),
+  cbind("Depression", "Less than 100%",  coef(model_fpl_dep)[1], model_fpl_dep$cse[1]),
+  cbind("Depression", "100% to 199%",    coef(model_fpl_dep)[2], model_fpl_dep$cse[2]),
+  cbind("Depression", "200% to 299%",    coef(model_fpl_dep)[3], model_fpl_dep$cse[3]),
+  cbind("Depression", "300% to 399%",    coef(model_fpl_dep)[4], model_fpl_dep$cse[4]),
+  cbind("Depression", "400% or greater", 0, 0),
   
   # Anxiety
-  cbind("Anxiety", "All children",    table_all$anxiety,    table_all$se.anxiety),
-  cbind("Anxiety", "Less than 100%",  table_fpl$anxiety[1], table_fpl$se.anxiety[1]),
-  cbind("Anxiety", "100% to 199%",    table_fpl$anxiety[2], table_fpl$se.anxiety[2]),
-  cbind("Anxiety", "200% to 299%",    table_fpl$anxiety[3], table_fpl$se.anxiety[3]),
-  cbind("Anxiety", "300% to 399%",    table_fpl$anxiety[4], table_fpl$se.anxiety[4]),
-  cbind("Anxiety", "400% or greater", table_fpl$anxiety[5], table_fpl$se.anxiety[5]),
+  cbind("Anxiety", "Less than 100%",  coef(model_fpl_anx)[1], model_fpl_anx$cse[1]),
+  cbind("Anxiety", "100% to 199%",    coef(model_fpl_anx)[2], model_fpl_anx$cse[2]),
+  cbind("Anxiety", "200% to 299%",    coef(model_fpl_anx)[3], model_fpl_anx$cse[3]),
+  cbind("Anxiety", "300% to 399%",    coef(model_fpl_anx)[4], model_fpl_anx$cse[4]),
+  cbind("Anxiety", "400% or greater", 0, 0),
   
   # ADD/ADHD
-  cbind("ADD/ADHD", "All children",    table_all$adhd,    table_all$se.adhd),
-  cbind("ADD/ADHD", "Less than 100%",  table_fpl$adhd[1], table_fpl$se.adhd[1]),
-  cbind("ADD/ADHD", "100% to 199%",    table_fpl$adhd[2], table_fpl$se.adhd[2]),
-  cbind("ADD/ADHD", "200% to 299%",    table_fpl$adhd[3], table_fpl$se.adhd[3]),
-  cbind("ADD/ADHD", "300% to 399%",    table_fpl$adhd[4], table_fpl$se.adhd[4]),
-  cbind("ADD/ADHD", "400% or greater", table_fpl$adhd[5], table_fpl$se.adhd[5]),
+  cbind("ADD/ADHD", "Less than 100%",  coef(model_fpl_add)[1], model_fpl_add$cse[1]),
+  cbind("ADD/ADHD", "100% to 199%",    coef(model_fpl_add)[2], model_fpl_add$cse[2]),
+  cbind("ADD/ADHD", "200% to 299%",    coef(model_fpl_add)[3], model_fpl_add$cse[3]),
+  cbind("ADD/ADHD", "300% to 399%",    coef(model_fpl_add)[4], model_fpl_add$cse[4]),
+  cbind("ADD/ADHD", "400% or greater", 0, 0),
   
   # Behavioral problems
-  cbind("Behavioral prob.", "All children",    table_all$behavior,    table_all$se.behavior),
-  cbind("Behavioral prob.", "Less than 100%",  table_fpl$behavior[1], table_fpl$se.behavior[1]),
-  cbind("Behavioral prob.", "100% to 199%",    table_fpl$behavior[2], table_fpl$se.behavior[2]),
-  cbind("Behavioral prob.", "200% to 299%",    table_fpl$behavior[3], table_fpl$se.behavior[3]),
-  cbind("Behavioral prob.", "300% to 399%",    table_fpl$behavior[4], table_fpl$se.behavior[4]),
-  cbind("Behavioral prob.", "400% or greater", table_fpl$behavior[5], table_fpl$se.behavior[5]),
+  cbind("Behavioral prob.", "Less than 100%",  coef(model_fpl_beh)[1], model_fpl_beh$cse[1]),
+  cbind("Behavioral prob.", "100% to 199%",    coef(model_fpl_beh)[2], model_fpl_beh$cse[2]),
+  cbind("Behavioral prob.", "200% to 299%",    coef(model_fpl_beh)[3], model_fpl_beh$cse[3]),
+  cbind("Behavioral prob.", "300% to 399%",    coef(model_fpl_beh)[4], model_fpl_beh$cse[4]),
+  cbind("Behavioral prob.", "400% or greater", 0, 0),
   
   # Digestive issues
-  cbind("Digestive issues", "All children",    table_all$stomach_r,    table_all$se.stomach_r),
-  cbind("Digestive issues", "Less than 100%",  table_fpl$stomach_r[1], table_fpl$se.stomach_r[1]),
-  cbind("Digestive issues", "100% to 199%",    table_fpl$stomach_r[2], table_fpl$se.stomach_r[2]),
-  cbind("Digestive issues", "200% to 299%",    table_fpl$stomach_r[3], table_fpl$se.stomach_r[3]),
-  cbind("Digestive issues", "300% to 399%",    table_fpl$stomach_r[4], table_fpl$se.stomach_r[4]),
-  cbind("Digestive issues", "400% or greater", table_fpl$stomach_r[5], table_fpl$se.stomach_r[5]),
+  cbind("Digestive issues", "Less than 100%",  coef(model_fpl_dig)[1], model_fpl_dig$cse[1]),
+  cbind("Digestive issues", "100% to 199%",    coef(model_fpl_dig)[2], model_fpl_dig$cse[2]),
+  cbind("Digestive issues", "200% to 299%",    coef(model_fpl_dig)[3], model_fpl_dig$cse[3]),
+  cbind("Digestive issues", "300% to 399%",    coef(model_fpl_dig)[4], model_fpl_dig$cse[4]),
+  cbind("Digestive issues", "400% or greater", 0, 0),
   
   # Any unmet care
-  cbind("Any unmet care", "All children",    table_all$unmet_needs,    table_all$se.unmet_needs),
-  cbind("Any unmet care", "Less than 100%",  table_fpl$unmet_needs[1], table_fpl$se.unmet_needs[1]),
-  cbind("Any unmet care", "100% to 199%",    table_fpl$unmet_needs[2], table_fpl$se.unmet_needs[2]),
-  cbind("Any unmet care", "200% to 299%",    table_fpl$unmet_needs[3], table_fpl$se.unmet_needs[3]),
-  cbind("Any unmet care", "300% to 399%",    table_fpl$unmet_needs[4], table_fpl$se.unmet_needs[4]),
-  cbind("Any unmet care", "400% or greater", table_fpl$unmet_needs[5], table_fpl$se.unmet_needs[5]),
+  cbind("Any unmet care", "Less than 100%",  coef(model_fpl_unm)[1], model_fpl_unm$cse[1]),
+  cbind("Any unmet care", "100% to 199%",    coef(model_fpl_unm)[2], model_fpl_unm$cse[2]),
+  cbind("Any unmet care", "200% to 299%",    coef(model_fpl_unm)[3], model_fpl_unm$cse[3]),
+  cbind("Any unmet care", "300% to 399%",    coef(model_fpl_unm)[4], model_fpl_unm$cse[4]),
+  cbind("Any unmet care", "400% or greater", 0, 0),
   
   # Unmet mental care
-  cbind("Unmet mental care", "All children",
-        table_all$unmet_mental,    table_all$se.unmet_mental),
-  cbind("Unmet mental care", "Less than 100%",
-        table_fpl$unmet_mental[1], table_fpl$se.unmet_mental[1]),
-  cbind("Unmet mental care", "100% to 199%",
-        table_fpl$unmet_mental[2], table_fpl$se.unmet_mental[2]),
-  cbind("Unmet mental care", "200% to 299%",
-        table_fpl$unmet_mental[3], table_fpl$se.unmet_mental[3]),
-  cbind("Unmet mental care", "300% to 399%",
-        table_fpl$unmet_mental[4], table_fpl$se.unmet_mental[4]),
-  cbind("Unmet mental care", "400% or greater",
-        table_fpl$unmet_mental[5], table_fpl$se.unmet_mental[5]),
+  cbind("Unmet mental care", "Less than 100%",  coef(model_fpl_men)[1], model_fpl_men$cse[1]),
+  cbind("Unmet mental care", "100% to 199%",    coef(model_fpl_men)[2], model_fpl_men$cse[2]),
+  cbind("Unmet mental care", "200% to 299%",    coef(model_fpl_men)[3], model_fpl_men$cse[3]),
+  cbind("Unmet mental care", "300% to 399%",    coef(model_fpl_men)[4], model_fpl_men$cse[4]),
+  cbind("Unmet mental care", "400% or greater", 0, 0),
   
   # 7+ school absences
-  cbind("7+ school absences", "All children",
-        table_all$missed_school,    table_all$se.missed_school),
-  cbind("7+ school absences", "Less than 100%",
-        table_fpl$missed_school[1], table_fpl$se.missed_school[1]),
-  cbind("7+ school absences", "100% to 199%",
-        table_fpl$missed_school[2], table_fpl$se.missed_school[2]),
-  cbind("7+ school absences", "200% to 299%",
-        table_fpl$missed_school[3], table_fpl$se.missed_school[3]),
-  cbind("7+ school absences", "300% to 399%",
-        table_fpl$missed_school[4], table_fpl$se.missed_school[4]),
-  cbind("7+ school absences", "400% or greater",
-        table_fpl$missed_school[5], table_fpl$se.missed_school[5]),
+  cbind("7+ school absences", "Less than 100%",  coef(model_fpl_sch)[1], model_fpl_sch$cse[1]),
+  cbind("7+ school absences", "100% to 199%",    coef(model_fpl_sch)[2], model_fpl_sch$cse[2]),
+  cbind("7+ school absences", "200% to 299%",    coef(model_fpl_sch)[3], model_fpl_sch$cse[3]),
+  cbind("7+ school absences", "300% to 399%",    coef(model_fpl_sch)[4], model_fpl_sch$cse[4]),
+  cbind("7+ school absences", "400% or greater", 0, 0),
   
   # Child employment
-  cbind("Child employment", "All children",
-        table_all$child_job,    table_all$se.child_job),
-  cbind("Child employment", "Less than 100%",
-        table_fpl$child_job[1], table_fpl$se.child_job[1]),
-  cbind("Child employment", "100% to 199%",
-        table_fpl$child_job[2], table_fpl$se.child_job[2]),
-  cbind("Child employment", "200% to 299%",
-        table_fpl$child_job[3], table_fpl$se.child_job[3]),
-  cbind("Child employment", "300% to 399%",
-        table_fpl$child_job[4], table_fpl$se.child_job[4]),
-  cbind("Child employment", "400% or greater",
-        table_fpl$child_job[5], table_fpl$se.child_job[5])
-))
+  cbind("Child employment", "Less than 100%",  coef(model_fpl_job)[1], model_fpl_job$cse[1]),
+  cbind("Child employment", "100% to 199%",    coef(model_fpl_job)[2], model_fpl_job$cse[2]),
+  cbind("Child employment", "200% to 299%",    coef(model_fpl_job)[3], model_fpl_job$cse[3]),
+  cbind("Child employment", "300% to 399%",    coef(model_fpl_job)[4], model_fpl_job$cse[4]),
+  cbind("Child employment", "400% or greater", 0, 0)
+  ))
 colnames(means_all) <- c("Outcome", "FPL level", "value", "se")
 
 # Reorder factor levels
-means_all$`FPL level` <- factor(means_all$`FPL level`, levels = c("All children", "Less than 100%", "100% to 199%", "200% to 299%", "300% to 399%", "400% or greater"))
+means_all$`FPL level` <- factor(means_all$`FPL level`, levels = c("Less than 100%", "100% to 199%", "200% to 299%", "300% to 399%", "400% or greater"))
 means_all$Outcome <- factor(means_all$Outcome, levels = c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Any unmet care", "Unmet mental care", "7+ school absences", "Child employment"))
 
 # Treat adjusted means and SEs as numeric
 means_all$value <- as.numeric(as.character(means_all$value))
 means_all$se    <- as.numeric(as.character(means_all$se))
 
+# Load package
+library(ggh4x)
+
 # Plot means by outcome
 plot_means <- ggplot(means_all, aes(x=`FPL level`, y=value, fill=`FPL level`)) +
-  geom_bar(stat = "identity") +
+  geom_hline(yintercept=0, color="black", linewidth=0.25) +
+  geom_point(stat = "identity") +
   geom_errorbar(aes(ymin=value-1.96*se, ymax=value+1.96*se), width=0.2) +
-  ylab("Unadjusted rate of mental health outcome") +
+  ylab("Adjusted rates of mental health outcomes,\nrelative to children living at 400% FPL") +
   xlab("Household FPL level") +
   theme_test() +
   theme(legend.position = "none",
@@ -686,90 +625,34 @@ plot_means <- ggplot(means_all, aes(x=`FPL level`, y=value, fill=`FPL level`)) +
         panel.border = element_blank(),
         panel.spacing = unit(0.5, "cm", data = NULL),
         strip.text = element_text(size=10)) +
-  scale_y_continuous(limits = c(0, 0.30),
-                     labels = scales::percent,
-                     breaks = seq(0, 0.30, 0.1),
-                     minor_breaks = seq(0, 0.30, 0.02)) +
+  # scale_y_continuous(limits = c(-0.08, 0.06),
+  #                    labels = scales::percent,
+  #                    breaks = seq(-0.1, 0.1, 0.02),
+  #                    minor_breaks = seq(-0.1, 0.1, 0.01)) +
   scale_fill_grey(start=0, end=0.7, name="") +
-  facet_wrap(~Outcome, nrow=3)
-  #facet_grid(~Outcome, scales="free", space="free")
-print(plot_means)
-
-?facet_grid
-
-# Export figure
-ggsave(plot=plot_means, file="Exhibits/Unadjusted rates of outcomes.pdf",
-       width=7, height=7, units='in', dpi=600)
-
-##############################################################################
-# Figure 1: U.S. maps for minimum wages
-##############################################################################
-
-# Generate new state variable
-# Lowercase necessary for maps function
-min_wage_df$state <- min_wage_df$State
-
-# Generate lagged minimum wage
-# Gets minimum wage of 4 years prior in same state
-min_wage_df <- min_wage_df %>%
-  group_by(state) %>%
-  mutate(lag_by_4 = lag(Effective.Minimum.Wage, n=4, default=NA))
-
-# Compute change in minimum wage
-# Note: Must use 2020 df when making map
-min_wage_df$change <- min_wage_df$Effective.Minimum.Wage - min_wage_df$lag_by_4
-
-# Subset to years of interest
-min_wage_2016 <- subset(min_wage_df, year %in% c(2016))
-min_wage_2020 <- subset(min_wage_df, year %in% c(2020))
-
-# Descriptives about minimum wage
-table(subset(min_wage_2020, fipsst %in% c(0:56))$change)
-table(subset(min_wage_2020, fipsst %in% c(0:56))$change == 0)
-
-# Map for minimum wage in 2016
-map_2016 <- plot_usmap(regions="states", data=min_wage_2016,
-                           values="Effective.Minimum.Wage", size=0.4) +
-  ggtitle("2016") +
-  theme(legend.position = "right",
-        text = element_text(size = 10, face = "bold"),
-        plot.title = element_text(size=14, face="bold", hjust=0.5)) +
-  viridis::scale_fill_viridis(limits=c(7.25, 14), breaks=c(7.25, 8, 10, 12, 14), labels=c("\n$7.25\n(fed. min.)", "$8", "$10", "$12", "$14"), name="Effective\nmin. wage")
-
-# Map for minimum wage in 2020
-map_2020 <- plot_usmap(regions="states", data=min_wage_2020,
-                       values="Effective.Minimum.Wage", size=0.4) +
-  ggtitle("2020") +
-  theme(legend.position = "right",
-        text = element_text(size = 10, face = "bold"),
-        plot.title = element_text(size=14, face="bold", hjust=0.5)) +
-  viridis::scale_fill_viridis(limits=c(7.25, 14), breaks=c(7.25, 8, 10, 12, 14), labels=c("\n$7.25\n(fed. min.)", "$8", "$10", "$12", "$14"), name="Effective\nmin. wage")
-
-# Map for change in minimum wage
-map_change <- plot_usmap(regions="states", data=min_wage_2020,
-                       values="change", size=0.4) +
-  ggtitle("Change") +
-  theme(legend.position = "right",
-        text = element_text(size = 10, face = "bold"),
-        plot.title = element_text(size=14, face="bold", hjust=0.5)) +
-  viridis::scale_fill_viridis(limits=c(0, 4.5), breaks=c(0, 1, 2, 3, 4), labels=c("$0", "$1", "$2", "$3", "$4"), name="Increase in\nmin. wage", oob=squish)
-
-# library(scales)
-# show_col(viridis_pal()(6))
-
-# Compile figures into object
-maps_all <- plot_grid(map_2016, map_2020, map_change, nrow=3)
+  facet_wrap(~Outcome, nrow=3, scales="free") +
+  facetted_pos_scales(
+    y = list(
+      Outcome %in% c("Depression", "Anxiety", "ADD/ADHD", "Behavioral prob.", "Digestive issues", "Any unmet care", "Unmet mental care", "7+ school absences") ~
+        scale_y_continuous(limits = c(-0.02, 0.08),
+                           labels = function(x) paste0(x*100," pp"),
+                           breaks = seq(-0.1, 0.1, 0.02),
+                           minor_breaks = seq(-0.1, 0.1, 0.01)),
+      Outcome == "Child employment" ~ 
+        scale_y_continuous(limits = c(-0.08, 0.02),
+                           labels = function(x) paste0(x*100," pp"),
+                           breaks = seq(-0.1, 0.1, 0.02),
+                           minor_breaks = seq(-0.1, 0.1, 0.01))
+    )
+  )
 
 # Export figure
-ggsave(plot=maps_all, file="Exhibits/Map of minimum wages, NSCH.pdf",
-       width=5, height=7, units='in', dpi=600)
+ggsave(plot=plot_means, file="Exhibits/NSCH adjusted rates of outcomes.pdf",
+       width=6, height=9, units='in', dpi=600)
 
 ##############################################################################
 # Functions for TWFE models
 ##############################################################################
-
-# Generate sampling clusters
-nsch_all_demo$cluster <- paste0(nsch_all_demo$strata, "-", nsch_all_demo$fipsst)
 
 # Function to extract values from TWFE models.
 # Requires: Df for saving coefficients, "lfe" model, title of model.
@@ -865,18 +748,18 @@ clean_coef_df <- function(coef_df) {
       "All children (2020 dollars)",
       "All children (lagged wage)",
       
-      # State-level cluster models
-      "All children (FE only, nested clust.)",
+      # Alternate cluster models
       "All children (FE only, state clust.)",
-      "All children (fully adj., nested clust.)",
-      "All children (fully adj., state clust.)"
+      "All children (FE only, nested clust.)",
+      "All children (fully adj., state clust.)",
+      "All children (fully adj., nested clust.)"
     ))
   
   # Return df
   return(coef_df)
 }
 
-# Function to generate coefficient plots.
+# Function to generate TWFE coefficient plots.
 # Requires: Df of coefficients, y title, y limits, color order.
 # Returns: Formatted coefficient plot.
 print_coef_plot <- function(coef_df, Y_TITLE, Y_MIN, Y_MAX, COLORS) {
@@ -940,111 +823,111 @@ print_coef_plot <- function(coef_df, Y_TITLE, Y_MIN, Y_MAX, COLORS) {
 
 # Depression
 model_min_dep_1 <- felm(depression ~ Effective.Minimum.Wage |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dep_2 <- felm(depression ~ Effective.Minimum.Wage +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Anxiety
 model_min_anx_1 <- felm(anxiety ~ Effective.Minimum.Wage |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_anx_2 <- felm(anxiety ~ Effective.Minimum.Wage +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # ADD/ADHD
 model_min_add_1 <- felm(adhd ~ Effective.Minimum.Wage |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_add_2 <- felm(adhd ~ Effective.Minimum.Wage +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Behavioral problems
 model_min_beh_1 <- felm(behavior ~ Effective.Minimum.Wage |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_beh_2 <- felm(behavior ~ Effective.Minimum.Wage +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Digestive issues
 model_min_dig_1 <- felm(stomach_r ~ Effective.Minimum.Wage |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dig_2 <- felm(stomach_r ~ Effective.Minimum.Wage +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Any unmet care
 model_min_unm_1 <- felm(unmet_needs ~ Effective.Minimum.Wage |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_unm_2 <- felm(unmet_needs ~ Effective.Minimum.Wage +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Unmet mental care
 model_min_men_1 <- felm(unmet_mental ~ Effective.Minimum.Wage |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_men_2 <- felm(unmet_mental ~ Effective.Minimum.Wage +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # 7+ school absences
 model_min_sch_1 <- felm(missed_school ~ Effective.Minimum.Wage |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_sch_2 <- felm(missed_school ~ Effective.Minimum.Wage +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Child employment
 model_min_job_1 <- felm(child_job ~ Effective.Minimum.Wage |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_job_2 <- felm(child_job ~ Effective.Minimum.Wage +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Get values from models
 main_df <- NULL
@@ -1091,296 +974,296 @@ ggsave(plot=plot_main, file="Exhibits/NSCH coefficient plot, main.pdf",
        width=5, height=4, units='in', dpi=600)
 
 ##############################################################################
-# Robustness check: Sub-populations
+# TWFE robustness check: Sub-populations
 ##############################################################################
 
 # Depression
 model_min_dep_l <- felm(depression ~ Effective.Minimum.Wage*low_income +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dep_a <- felm(depression ~ Effective.Minimum.Wage*age_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dep_r <- felm(depression ~ Effective.Minimum.Wage*race_eth_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dep_e <- felm(depression ~ Effective.Minimum.Wage*adult_edu_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dep_n <- felm(depression ~ Effective.Minimum.Wage*nativity_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Anxiety
 model_min_anx_l <- felm(anxiety ~ Effective.Minimum.Wage*low_income +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_anx_a <- felm(anxiety ~ Effective.Minimum.Wage*age_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_anx_r <- felm(anxiety ~ Effective.Minimum.Wage*race_eth_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_anx_e <- felm(anxiety ~ Effective.Minimum.Wage*adult_edu_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_anx_n <- felm(anxiety ~ Effective.Minimum.Wage*nativity_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # ADD/ADHD
 model_min_add_l <- felm(adhd ~ Effective.Minimum.Wage*low_income +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_add_a <- felm(adhd ~ Effective.Minimum.Wage*age_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_add_r <- felm(adhd ~ Effective.Minimum.Wage*race_eth_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_add_e <- felm(adhd ~ Effective.Minimum.Wage*adult_edu_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_add_n <- felm(adhd ~ Effective.Minimum.Wage*nativity_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Behavioral problems
 model_min_beh_l <- felm(behavior ~ Effective.Minimum.Wage*low_income +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_beh_a <- felm(behavior ~ Effective.Minimum.Wage*age_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_beh_r <- felm(behavior ~ Effective.Minimum.Wage*race_eth_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_beh_e <- felm(behavior ~ Effective.Minimum.Wage*adult_edu_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_beh_n <- felm(behavior ~ Effective.Minimum.Wage*nativity_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Digestive issues
 model_min_dig_l <- felm(stomach_r ~ Effective.Minimum.Wage*low_income +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dig_a <- felm(stomach_r ~ Effective.Minimum.Wage*age_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dig_r <- felm(stomach_r ~ Effective.Minimum.Wage*race_eth_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dig_e <- felm(stomach_r ~ Effective.Minimum.Wage*adult_edu_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dig_n <- felm(stomach_r ~ Effective.Minimum.Wage*nativity_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Any unmet care
 model_min_unm_l <- felm(unmet_needs ~ Effective.Minimum.Wage*low_income +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_unm_a <- felm(unmet_needs ~ Effective.Minimum.Wage*age_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_unm_r <- felm(unmet_needs ~ Effective.Minimum.Wage*race_eth_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_unm_e <- felm(unmet_needs ~ Effective.Minimum.Wage*adult_edu_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_unm_n <- felm(unmet_needs ~ Effective.Minimum.Wage*nativity_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Unmet mental care
 model_min_men_l <- felm(unmet_mental ~ Effective.Minimum.Wage*low_income +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_men_a <- felm(unmet_mental ~ Effective.Minimum.Wage*age_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_men_r <- felm(unmet_mental ~ Effective.Minimum.Wage*race_eth_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_men_e <- felm(unmet_mental ~ Effective.Minimum.Wage*adult_edu_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_men_n <- felm(unmet_mental ~ Effective.Minimum.Wage*nativity_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # 7+ school absences
 model_min_sch_l <- felm(missed_school ~ Effective.Minimum.Wage*low_income +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_sch_a <- felm(missed_school ~ Effective.Minimum.Wage*age_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_sch_r <- felm(missed_school ~ Effective.Minimum.Wage*race_eth_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_sch_e <- felm(missed_school ~ Effective.Minimum.Wage*adult_edu_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_sch_n <- felm(missed_school ~ Effective.Minimum.Wage*nativity_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Child employment
 model_min_job_l <- felm(child_job ~ Effective.Minimum.Wage*low_income +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_job_a <- felm(child_job ~ Effective.Minimum.Wage*age_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_job_r <- felm(child_job ~ Effective.Minimum.Wage*race_eth_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_job_e <- felm(child_job ~ Effective.Minimum.Wage*adult_edu_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_job_n <- felm(child_job ~ Effective.Minimum.Wage*nativity_cat +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Get values from models
 sub_df <- NULL
@@ -1463,134 +1346,134 @@ ggsave(plot=plot_sub, file="Exhibits/NSCH coefficient plot, sub-population.pdf",
        width=7, height=4, units='in', dpi=600)
 
 ##############################################################################
-# Robustness check: Alternate specifications
+# TWFE robustness check: Alternate specifications
 ##############################################################################
 
 # Depression
 model_min_dep_x <- felm(depression ~ Effective.Minimum.Wage.2020.Dollars +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dep_y <- felm(depression ~ lag_by_1 +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Anxiety
 model_min_anx_x <- felm(anxiety ~ Effective.Minimum.Wage.2020.Dollars +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_anx_y <- felm(anxiety ~ lag_by_1 +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # ADD/ADHD
 model_min_add_x <- felm(adhd ~ Effective.Minimum.Wage.2020.Dollars +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_add_y <- felm(adhd ~ lag_by_1 +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Behavioral problems
 model_min_beh_x <- felm(behavior ~ Effective.Minimum.Wage.2020.Dollars +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_beh_y <- felm(behavior ~ lag_by_1 +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Digestive issues
 model_min_dig_x <- felm(stomach_r ~ Effective.Minimum.Wage.2020.Dollars +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_dig_y <- felm(stomach_r ~ lag_by_1 +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Any unmet care
 model_min_unm_x <- felm(unmet_needs ~ Effective.Minimum.Wage.2020.Dollars +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_unm_y <- felm(unmet_needs ~ lag_by_1 +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Unmet mental care
 model_min_men_x <- felm(unmet_mental ~ Effective.Minimum.Wage.2020.Dollars +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_men_y <- felm(unmet_mental ~ lag_by_1 +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # 7+ school absences
 model_min_sch_x <- felm(missed_school ~ Effective.Minimum.Wage.2020.Dollars +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_sch_y <- felm(missed_school ~ lag_by_1 +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Child employment
 model_min_job_x <- felm(child_job ~ Effective.Minimum.Wage.2020.Dollars +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 model_min_job_y <- felm(child_job ~ lag_by_1 +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Get values from models
 rob_df <- NULL
@@ -1640,8 +1523,15 @@ ggsave(plot=plot_rob, file="Exhibits/NSCH coefficient plot, robustness.pdf",
        width=7, height=4, units='in', dpi=600)
 
 ##############################################################################
-# Robustness check: Logistic regression
+# TWFE robustness check: Logistic regression
 ##############################################################################
+
+# Define complex sampling design
+# Used state clusters and apply survey weights
+design_all <- svydesign(id=~fipsst, weights=~fwc, data=nsch_all_model)
+
+# Subset to children aged 3-17
+design_sub <- subset(design_all, age %in% c(3:17))
 
 # Depression
 log_min_dep_1 <- svyglm(depression ~ Effective.Minimum.Wage +
@@ -1737,161 +1627,106 @@ log_min_job_2 <- svyglm(child_job ~ Effective.Minimum.Wage +
 log_df <- as.data.frame(rbind(
   # Depression
   cbind("Depression", "Diagnoses", "All children (FE only)",
-        exp(coef(log_min_dep_1))[2],
-        exp(confint(log_min_dep_1))[2,1],
-        exp(confint(log_min_dep_1))[2,2],
-        exp(confint(log_min_dep_1, level=0.997))[2,1],
-        exp(confint(log_min_dep_1, level=0.997))[2,2],
+        coef(log_min_dep_1)[2],
+        SE(log_min_dep_1)[2],
         length(log_min_dep_1$residuals)),
   
   cbind("Depression", "Diagnoses", "All children (fully adjusted)",
-        exp(coef(log_min_dep_2))[2],
-        exp(confint(log_min_dep_2))[2,1],
-        exp(confint(log_min_dep_2))[2,2],
-        exp(confint(log_min_dep_2, level=0.997))[2,1],
-        exp(confint(log_min_dep_2, level=0.997))[2,2],
+        coef(log_min_dep_2)[2],
+        SE(log_min_dep_2)[2],
         length(log_min_dep_2$residuals)),
   
   # Anxiety
   cbind("Anxiety", "Diagnoses", "All children (FE only)",
-        exp(coef(log_min_anx_1))[2],
-        exp(confint(log_min_anx_1))[2,1],
-        exp(confint(log_min_anx_1))[2,2],
-        exp(confint(log_min_anx_1, level=0.997))[2,1],
-        exp(confint(log_min_anx_1, level=0.997))[2,2],
+        coef(log_min_anx_1)[2],
+        SE(log_min_anx_1)[2],
         length(log_min_anx_1$residuals)),
   
   cbind("Anxiety", "Diagnoses", "All children (fully adjusted)",
-        exp(coef(log_min_anx_2))[2],
-        exp(confint(log_min_anx_2))[2,1],
-        exp(confint(log_min_anx_2))[2,2],
-        exp(confint(log_min_anx_2, level=0.997))[2,1],
-        exp(confint(log_min_anx_2, level=0.997))[2,2],
+        coef(log_min_anx_2)[2],
+        SE(log_min_anx_2)[2],
         length(log_min_anx_2$residuals)),
   
   # ADD/ADHD
   cbind("ADD/ADHD", "Diagnoses", "All children (FE only)",
-        exp(coef(log_min_add_1))[2],
-        exp(confint(log_min_add_1))[2,1],
-        exp(confint(log_min_add_1))[2,2],
-        exp(confint(log_min_add_1, level=0.997))[2,1],
-        exp(confint(log_min_add_1, level=0.997))[2,2],
+        coef(log_min_add_1)[2],
+        SE(log_min_add_1)[2],
         length(log_min_add_1$residuals)),
   
   cbind("ADD/ADHD", "Diagnoses", "All children (fully adjusted)",
-        exp(coef(log_min_add_2))[2],
-        exp(confint(log_min_add_2))[2,1],
-        exp(confint(log_min_add_2))[2,2],
-        exp(confint(log_min_add_2, level=0.997))[2,1],
-        exp(confint(log_min_add_2, level=0.997))[2,2],
+        coef(log_min_add_2)[2],
+        SE(log_min_add_2)[2],
         length(log_min_add_2$residuals)),
   
   # Behavioral problems
   cbind("Behavioral prob.", "Diagnoses", "All children (FE only)",
-        exp(coef(log_min_beh_1))[2],
-        exp(confint(log_min_beh_1))[2,1],
-        exp(confint(log_min_beh_1))[2,2],
-        exp(confint(log_min_beh_1, level=0.997))[2,1],
-        exp(confint(log_min_beh_1, level=0.997))[2,2],
+        coef(log_min_beh_1)[2],
+        SE(log_min_beh_1)[2],
         length(log_min_beh_1$residuals)),
   
   cbind("Behavioral prob.", "Diagnoses", "All children (fully adjusted)",
-        exp(coef(log_min_beh_2))[2],
-        exp(confint(log_min_beh_2))[2,1],
-        exp(confint(log_min_beh_2))[2,2],
-        exp(confint(log_min_beh_2, level=0.997))[2,1],
-        exp(confint(log_min_beh_2, level=0.997))[2,2],
+        coef(log_min_beh_2)[2],
+        SE(log_min_beh_2)[2],
         length(log_min_beh_2$residuals)),
   
   # Digestive issues
   cbind("Digestive issues", "Sx.", "All children (FE only)",
-        exp(coef(log_min_dig_1))[2],
-        exp(confint(log_min_dig_1))[2,1],
-        exp(confint(log_min_dig_1))[2,2],
-        exp(confint(log_min_dig_1, level=0.997))[2,1],
-        exp(confint(log_min_dig_1, level=0.997))[2,2],
+        coef(log_min_dig_1)[2],
+        SE(log_min_dig_1)[2],
         length(log_min_dig_1$residuals)),
   
   cbind("Digestive issues", "Sx.", "All children (fully adjusted)",
-        exp(coef(log_min_dig_2))[2],
-        exp(confint(log_min_dig_2))[2,1],
-        exp(confint(log_min_dig_2))[2,2],
-        exp(confint(log_min_dig_2, level=0.997))[2,1],
-        exp(confint(log_min_dig_2, level=0.997))[2,2],
+        coef(log_min_dig_2)[2],
+        SE(log_min_dig_2)[2],
         length(log_min_dig_2$residuals)),
   
   # Any unmet care
   cbind("Any unmet care", "Health care", "All children (FE only)",
-        exp(coef(log_min_unm_1))[2],
-        exp(confint(log_min_unm_1))[2,1],
-        exp(confint(log_min_unm_1))[2,2],
-        exp(confint(log_min_unm_1, level=0.997))[2,1],
-        exp(confint(log_min_unm_1, level=0.997))[2,2],
+        coef(log_min_unm_1)[2],
+        SE(log_min_unm_1)[2],
         length(log_min_unm_1$residuals)),
   
   cbind("Any unmet care", "Health care", "All children (fully adjusted)",
-        exp(coef(log_min_unm_2))[2],
-        exp(confint(log_min_unm_2))[2,1],
-        exp(confint(log_min_unm_2))[2,2],
-        exp(confint(log_min_unm_2, level=0.997))[2,1],
-        exp(confint(log_min_unm_2, level=0.997))[2,2],
+        coef(log_min_unm_2)[2],
+        SE(log_min_unm_2)[2],
         length(log_min_unm_2$residuals)),
   
   # Unmet mental care
   cbind("Unmet mental care", "Health care", "All children (FE only)",
-        exp(coef(log_min_men_1))[2],
-        exp(confint(log_min_men_1))[2,1],
-        exp(confint(log_min_men_1))[2,2],
-        exp(confint(log_min_men_1, level=0.997))[2,1],
-        exp(confint(log_min_men_1, level=0.997))[2,2],
+        coef(log_min_men_1)[2],
+        SE(log_min_men_1)[2],
         length(log_min_men_1$residuals)),
   
   cbind("Unmet mental care", "Health care", "All children (fully adjusted)",
-        exp(coef(log_min_men_2))[2],
-        exp(confint(log_min_men_2))[2,1],
-        exp(confint(log_min_men_2))[2,2],
-        exp(confint(log_min_men_2, level=0.997))[2,1],
-        exp(confint(log_min_men_2, level=0.997))[2,2],
+        coef(log_min_men_2)[2],
+        SE(log_min_men_2)[2],
         length(log_min_men_2$residuals)),
   
   # 7+ school absences
   cbind("7+ school absences", "School & Work", "All children (FE only)",
-        exp(coef(log_min_sch_1))[2],
-        exp(confint(log_min_sch_1))[2,1],
-        exp(confint(log_min_sch_1))[2,2],
-        exp(confint(log_min_sch_1, level=0.997))[2,1],
-        exp(confint(log_min_sch_1, level=0.997))[2,2],
+        coef(log_min_sch_1)[2],
+        SE(log_min_sch_1)[2],
         length(log_min_sch_1$residuals)),
   
   cbind("7+ school absences", "School & Work", "All children (fully adjusted)",
-        exp(coef(log_min_sch_2))[2],
-        exp(confint(log_min_sch_2))[2,1],
-        exp(confint(log_min_sch_2))[2,2],
-        exp(confint(log_min_sch_2, level=0.997))[2,1],
-        exp(confint(log_min_sch_2, level=0.997))[2,2],
+        coef(log_min_sch_2)[2],
+        SE(log_min_sch_2)[2],
         length(log_min_sch_2$residuals)),
   
   # Child employment
   cbind("Child employment", "School & Work", "All children (FE only)",
-        exp(coef(log_min_job_1))[2],
-        exp(confint(log_min_job_1))[2,1],
-        exp(confint(log_min_job_1))[2,2],
-        exp(confint(log_min_job_1, level=0.997))[2,1],
-        exp(confint(log_min_job_1, level=0.997))[2,2],
+        coef(log_min_job_1)[2],
+        SE(log_min_job_1)[2],
         length(log_min_job_1$residuals)),
   
   cbind("Child employment", "School & Work", "All children (fully adjusted)",
-        exp(coef(log_min_job_2))[2],
-        exp(confint(log_min_job_2))[2,1],
-        exp(confint(log_min_job_2))[2,2],
-        exp(confint(log_min_job_2, level=0.997))[2,1],
-        exp(confint(log_min_job_2, level=0.997))[2,2],
+        coef(log_min_job_2)[2],
+        SE(log_min_job_2)[2],
         length(log_min_job_2$residuals))
 ))
 
 # Name columns
-colnames(log_df) <- c("Outcome", "Category", "Sample", "or",
-                      "conf_95_low", "conf_95_high", "conf_997_low", "conf_997_high", "n")
+colnames(log_df) <- c("Outcome", "Category", "Sample", "log_odds", "se", "n")
 
 # Reorder outcomes
 log_df$Outcome <- factor(
@@ -1906,24 +1741,21 @@ log_df$Sample <- factor(log_df$Sample, levels=c("All children (FE only)",
                                                 "All children (fully adjusted)"))
 
 # Treat columns as numeric
-log_df$or            <- as.numeric(log_df$or)
-log_df$conf_95_low   <- as.numeric(log_df$conf_95_low)
-log_df$conf_95_high  <- as.numeric(log_df$conf_95_high)
-log_df$conf_997_low  <- as.numeric(log_df$conf_997_low)
-log_df$conf_997_high <- as.numeric(log_df$conf_997_high)
-log_df$n             <- as.numeric(log_df$n)
+log_df$log_odds <- as.numeric(log_df$log_odds)
+log_df$se       <- as.numeric(log_df$se)
+log_df$n        <- as.numeric(log_df$n)
 
 # Get min. and max. N
 min(log_df$n); max(log_df$n)
 
 # Generate coefficient plot: Logistic
-plot_log <- ggplot(log_df, aes(x=Outcome, y=or, group=Sample, color=Sample)) +
+plot_log <- ggplot(log_df, aes(x=Outcome, y=exp(log_odds), group=Sample, color=Sample)) +
   geom_hline(yintercept=0, color="black", linewidth=0.25) +
   geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
   scale_shape_manual(values = 1:nlevels(log_df$Sample)) +
-  geom_errorbar(aes(ymin=conf_95_low, ymax=conf_95_high),
+  geom_errorbar(aes(ymin=exp(log_odds - 1.96*se), ymax=exp(log_odds + 1.96*se)),
                 position = position_dodge(width=0.6), width=0, linewidth=0.8) +
-  geom_errorbar(aes(ymin=conf_997_low, ymax=conf_997_high),
+  geom_errorbar(aes(ymin=exp(log_odds - 2.94*se), ymax=exp(log_odds + 2.94*se)),
                 position = position_dodge(width=0.6), width=0.3, alpha=0.5) +
   ylab("Association of $1 increase in min. wage\nwith children's mental health") +
   ggtitle("All children (3-17), 2016-2020") +
@@ -1950,116 +1782,116 @@ ggsave(plot=plot_log, file="Exhibits/NSCH coefficient plot, logistic.pdf",
        width=5, height=4, units='in', dpi=600)
 
 ##############################################################################
-# Robustness check: Lifetime minimum wage
+# TWFE robustness check: Lifetime minimum wage
 ##############################################################################
 
 # Depression
 life_min_dep_1 <- felm(depression ~ wage_life + age |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 life_min_dep_2 <- felm(depression ~ wage_life +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Anxiety
 life_min_anx_1 <- felm(anxiety ~ wage_life + age |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 life_min_anx_2 <- felm(anxiety ~ wage_life +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # ADD/ADHD
 life_min_add_1 <- felm(adhd ~ wage_life + age |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 life_min_add_2 <- felm(adhd ~ wage_life +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Behavioral problems
 life_min_beh_1 <- felm(behavior ~ wage_life + age |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 life_min_beh_2 <- felm(behavior ~ wage_life +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Digestive issues
 life_min_dig_1 <- felm(stomach_r ~ wage_life + age |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 life_min_dig_2 <- felm(stomach_r ~ wage_life +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Any unmet care
 life_min_unm_1 <- felm(unmet_needs ~ wage_life + age |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 life_min_unm_2 <- felm(unmet_needs ~ wage_life +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Unmet mental care
 life_min_men_1 <- felm(unmet_mental ~ wage_life + age |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 life_min_men_2 <- felm(unmet_mental ~ wage_life +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # 7+ school absences
 life_min_sch_1 <- felm(missed_school ~ wage_life + age |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 life_min_sch_2 <- felm(missed_school ~ wage_life +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Child employment
 life_min_job_1 <- felm(child_job ~ wage_life + age |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 life_min_job_2 <- felm(child_job ~ wage_life +
                           age + sex + race_eth + family_struc + adult_edu + nativity +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                          year + fipsst | 0 | cluster,
-                        data    = nsch_all_demo,
-                        weights = nsch_all_demo$weights)
+                          year + fipsst | 0 | fipsst,
+                        data    = nsch_all_model,
+                        weights = nsch_all_model$weights)
 
 # Get values from models
 life_df <- NULL
@@ -2096,8 +1928,8 @@ min(life_df$n); max(life_df$n)
 plot_life <- print_coef_plot(
   life_df,
   Y_TITLE    = "Association of $1 increase in lifetime\nmin. wage with children's mental health",
-  Y_MIN      = -0.06,
-  Y_MAX      =  0.06,
+  Y_MIN      = -0.065,
+  Y_MAX      =  0.065,
   COLORS     = "Standard"
 )
 
@@ -2106,164 +1938,164 @@ ggsave(plot=plot_life, file="Exhibits/NSCH coefficient plot, lifetime.pdf",
        width=5, height=4, units='in', dpi=600)
 
 ##############################################################################
-# Robustness check: Cluster at state level
+# TWFE robustness check: Nested clusters
 ##############################################################################
 
 # Depression
 model_min_dep_1c <- felm(depression ~ Effective.Minimum.Wage |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 model_min_dep_2c <- felm(depression ~ Effective.Minimum.Wage +
                            age + sex + race_eth + family_struc + adult_edu + nativity +
                            elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 
 # Anxiety
 model_min_anx_1c <- felm(anxiety ~ Effective.Minimum.Wage |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 model_min_anx_2c <- felm(anxiety ~ Effective.Minimum.Wage +
                            age + sex + race_eth + family_struc + adult_edu + nativity +
                            elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 
 # ADD/ADHD
 model_min_add_1c <- felm(adhd ~ Effective.Minimum.Wage |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 model_min_add_2c <- felm(adhd ~ Effective.Minimum.Wage +
                            age + sex + race_eth + family_struc + adult_edu + nativity +
                            elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 
 # Behavioral problems
 model_min_beh_1c <- felm(behavior ~ Effective.Minimum.Wage |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 model_min_beh_2c <- felm(behavior ~ Effective.Minimum.Wage +
                            age + sex + race_eth + family_struc + adult_edu + nativity +
                            elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 
 # Digestive issues
 model_min_dig_1c <- felm(stomach_r ~ Effective.Minimum.Wage |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 model_min_dig_2c <- felm(stomach_r ~ Effective.Minimum.Wage +
                            age + sex + race_eth + family_struc + adult_edu + nativity +
                            elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 
 # Any umet needs
 model_min_unm_1c <- felm(unmet_needs ~ Effective.Minimum.Wage |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 model_min_unm_2c <- felm(unmet_needs ~ Effective.Minimum.Wage +
                            age + sex + race_eth + family_struc + adult_edu + nativity +
                            elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 
 # Unmet mental needs
 model_min_men_1c <- felm(unmet_mental ~ Effective.Minimum.Wage |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 model_min_men_2c <- felm(unmet_mental ~ Effective.Minimum.Wage +
                            age + sex + race_eth + family_struc + adult_edu + nativity +
                            elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 
 # 7+ school absences
 model_min_sch_1c <- felm(missed_school ~ Effective.Minimum.Wage |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 model_min_sch_2c <- felm(missed_school ~ Effective.Minimum.Wage +
                            age + sex + race_eth + family_struc + adult_edu + nativity +
                            elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 
 # Child employment
 model_min_job_1c <- felm(child_job ~ Effective.Minimum.Wage |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 model_min_job_2c <- felm(child_job ~ Effective.Minimum.Wage +
                            age + sex + race_eth + family_struc + adult_edu + nativity +
                            elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                           year + fipsst | 0 | fipsst,
-                         data    = nsch_all_demo,
-                         weights = nsch_all_demo$weights)
+                           year + fipsst | 0 | cluster,
+                         data    = nsch_all_model,
+                         weights = nsch_all_model$weights)
 
 # Get values from models
 clust_df <- NULL
 
-# All children (FE only, state clust.)
-clust_df <- make_coef_df(clust_df, model_min_dep_1c, "All children (FE only, state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_anx_1c, "All children (FE only, state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_add_1c, "All children (FE only, state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_beh_1c, "All children (FE only, state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_dig_1c, "All children (FE only, state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_unm_1c, "All children (FE only, state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_men_1c, "All children (FE only, state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_sch_1c, "All children (FE only, state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_job_1c, "All children (FE only, state clust.)")
-
-# All children (fully adj., state clust.)
-clust_df <- make_coef_df(clust_df, model_min_dep_2c, "All children (fully adj., state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_anx_2c, "All children (fully adj., state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_add_2c, "All children (fully adj., state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_beh_2c, "All children (fully adj., state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_dig_2c, "All children (fully adj., state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_unm_2c, "All children (fully adj., state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_men_2c, "All children (fully adj., state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_sch_2c, "All children (fully adj., state clust.)")
-clust_df <- make_coef_df(clust_df, model_min_job_2c, "All children (fully adj., state clust.)")
-
-# Add main models for comparison
 # All children (FE only, nested clust.)
-clust_df <- make_coef_df(clust_df, model_min_dep_1, "All children (FE only, nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_anx_1, "All children (FE only, nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_add_1, "All children (FE only, nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_beh_1, "All children (FE only, nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_dig_1, "All children (FE only, nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_unm_1, "All children (FE only, nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_men_1, "All children (FE only, nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_sch_1, "All children (FE only, nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_job_1, "All children (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_dep_1c, "All children (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_anx_1c, "All children (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_add_1c, "All children (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_beh_1c, "All children (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_dig_1c, "All children (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_unm_1c, "All children (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_men_1c, "All children (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_sch_1c, "All children (FE only, nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_job_1c, "All children (FE only, nested clust.)")
 
 # All children (fully adj., nested clust.)
-clust_df <- make_coef_df(clust_df, model_min_dep_2, "All children (fully adj., nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_anx_2, "All children (fully adj., nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_add_2, "All children (fully adj., nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_beh_2, "All children (fully adj., nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_dig_2, "All children (fully adj., nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_unm_2, "All children (fully adj., nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_men_2, "All children (fully adj., nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_sch_2, "All children (fully adj., nested clust.)")
-clust_df <- make_coef_df(clust_df, model_min_job_2, "All children (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_dep_2c, "All children (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_anx_2c, "All children (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_add_2c, "All children (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_beh_2c, "All children (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_dig_2c, "All children (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_unm_2c, "All children (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_men_2c, "All children (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_sch_2c, "All children (fully adj., nested clust.)")
+clust_df <- make_coef_df(clust_df, model_min_job_2c, "All children (fully adj., nested clust.)")
+
+# Add main models for comparison
+# All children (FE only, state clust.)
+clust_df <- make_coef_df(clust_df, model_min_dep_1, "All children (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_anx_1, "All children (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_add_1, "All children (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_beh_1, "All children (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_dig_1, "All children (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_unm_1, "All children (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_men_1, "All children (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_sch_1, "All children (FE only, state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_job_1, "All children (FE only, state clust.)")
+
+# All children (fully adj., state clust.)
+clust_df <- make_coef_df(clust_df, model_min_dep_2, "All children (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_anx_2, "All children (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_add_2, "All children (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_beh_2, "All children (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_dig_2, "All children (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_unm_2, "All children (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_men_2, "All children (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_sch_2, "All children (fully adj., state clust.)")
+clust_df <- make_coef_df(clust_df, model_min_job_2, "All children (fully adj., state clust.)")
 
 # Clean dataframe of coefficients
 clust_df <- clean_coef_df(clust_df)
@@ -2271,7 +2103,7 @@ clust_df <- clean_coef_df(clust_df)
 # Get min. and max. N
 min(clust_df$n); max(clust_df$n)
 
-# Generate coefficient plot: State clusters
+# Generate coefficient plot: Nested clusters
 plot_clust <- print_coef_plot(
   clust_df,
   Y_TITLE    = "Association of $1 increase in min. wage\nwith children's mental health",
@@ -2284,5 +2116,5 @@ plot_clust <- print_coef_plot(
 plot_clust <- plot_clust + guides(shape = guide_legend(nrow = 2))
 
 # Export figure
-ggsave(plot=plot_clust, file="Exhibits/NSCH coefficient plot, state clusters.pdf",
+ggsave(plot=plot_clust, file="Exhibits/NSCH coefficient plot, nested clusters.pdf",
        width=7, height=4, units='in', dpi=600)
