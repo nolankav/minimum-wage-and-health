@@ -625,10 +625,6 @@ plot_means <- ggplot(means_all, aes(x=`FPL level`, y=value, fill=`FPL level`)) +
         panel.border = element_blank(),
         panel.spacing = unit(0.5, "cm", data = NULL),
         strip.text = element_text(size=10)) +
-  # scale_y_continuous(limits = c(-0.08, 0.06),
-  #                    labels = scales::percent,
-  #                    breaks = seq(-0.1, 0.1, 0.02),
-  #                    minor_breaks = seq(-0.1, 0.1, 0.01)) +
   scale_fill_grey(start=0, end=0.7, name="") +
   facet_wrap(~Outcome, nrow=3, scales="free") +
   facetted_pos_scales(
@@ -690,11 +686,11 @@ make_coef_df <- function(coef_df, model, TITLE) {
   
   if (model$lhs == "missed_school") {
     outcome  <- "7+ school absences"
-    category <- "School & Work"}
+    category <- "School & work"}
   
   if (model$lhs == "child_job") {
     outcome  <- "Child employment"
-    category <- "School & Work"}
+    category <- "School & work"}
   
   # Add row to coefficient df
   coef_df <- rbind(coef_df, cbind(
@@ -726,7 +722,7 @@ clean_coef_df <- function(coef_df) {
   
   # Reorder categories
   coef_df$Category <- factor(
-    coef_df$Category, levels=c("Diagnoses", "Sx.", "Health care", "School & Work"))
+    coef_df$Category, levels=c("Diagnoses", "Sx.", "Health care", "School & work"))
   
   # Reorder samples
   coef_df$Sample <- factor(
@@ -960,8 +956,39 @@ main_df <- clean_coef_df(main_df)
 # Get min. and max. N
 min(main_df$n); max(main_df$n)
 
-# Generate coefficient plot: Main
-plot_main <- print_coef_plot(
+# Generate coefficient plot: Main (for main text)
+plot_main_1 <- ggplot(main_df, aes(x=Outcome, y=effect, group=Sample, color=Sample)) +
+  geom_hline(yintercept=0, color="black", linewidth=0.25) +
+  geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
+  scale_shape_manual(values = 1:nlevels(main_df$Sample)) +
+  geom_errorbar(aes(ymin=effect-1.96*se, ymax=effect+1.96*se),
+                position = position_dodge(width=0.6), width=0.2) +
+  ylab("Association of $1 increase in min. wage\nwith children's mental health") +
+  ggtitle("All children (3-17), 2016-2020") +
+  theme_test() +
+  theme(legend.position = "bottom",
+        text = element_text(size = 10, face = "bold"),
+        axis.text.x = element_text(angle=45, hjust=1, vjust=1),
+        axis.title.x = element_blank(),
+        axis.ticks = element_blank(),
+        strip.background = element_blank(),
+        legend.title = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(color="light gray", linewidth=0.5),
+        panel.grid.minor.y = element_line(color="light gray", linewidth=0.25)) +
+  scale_y_continuous(limits = c(-0.045, 0.045),
+                     breaks = seq(-0.1, 0.1, 0.02),
+                     minor_breaks = seq(-0.1, 0.1, 0.01),
+                     labels = function(x) paste0(x*100," pp")) +
+  scale_color_grey(start=0.7, end=0) +
+  facet_grid(~Category, scales="free", space="free_x")
+
+# Export figure
+ggsave(plot=plot_main_1, file="Exhibits/NSCH coefficient plot, main 1.pdf",
+       width=5, height=4, units='in', dpi=600)
+
+# Generate coefficient plot: Main (for appendix)
+plot_main_2 <- print_coef_plot(
   main_df,
   Y_TITLE    = "Association of $1 increase in min. wage\nwith children's mental health",
   Y_MIN      = -0.045,
@@ -970,7 +997,7 @@ plot_main <- print_coef_plot(
 )
 
 # Export figure
-ggsave(plot=plot_main, file="Exhibits/NSCH coefficient plot, main.pdf",
+ggsave(plot=plot_main_2, file="Exhibits/NSCH coefficient plot, main 2.pdf",
        width=5, height=4, units='in', dpi=600)
 
 ##############################################################################
@@ -1703,23 +1730,23 @@ log_df <- as.data.frame(rbind(
         length(log_min_men_2$residuals)),
   
   # 7+ school absences
-  cbind("7+ school absences", "School & Work", "All children (FE only)",
+  cbind("7+ school absences", "School & work", "All children (FE only)",
         coef(log_min_sch_1)[2],
         SE(log_min_sch_1)[2],
         length(log_min_sch_1$residuals)),
   
-  cbind("7+ school absences", "School & Work", "All children (fully adjusted)",
+  cbind("7+ school absences", "School & work", "All children (fully adjusted)",
         coef(log_min_sch_2)[2],
         SE(log_min_sch_2)[2],
         length(log_min_sch_2$residuals)),
   
   # Child employment
-  cbind("Child employment", "School & Work", "All children (FE only)",
+  cbind("Child employment", "School & work", "All children (FE only)",
         coef(log_min_job_1)[2],
         SE(log_min_job_1)[2],
         length(log_min_job_1$residuals)),
   
-  cbind("Child employment", "School & Work", "All children (fully adjusted)",
+  cbind("Child employment", "School & work", "All children (fully adjusted)",
         coef(log_min_job_2)[2],
         SE(log_min_job_2)[2],
         length(log_min_job_2$residuals))
@@ -1734,7 +1761,7 @@ log_df$Outcome <- factor(
 
 # Reorder categories
 log_df$Category <- factor(
-  log_df$Category, levels=c("Diagnoses", "Sx.", "Health care", "School & Work"))
+  log_df$Category, levels=c("Diagnoses", "Sx.", "Health care", "School & work"))
 
 # Reorder samples
 log_df$Sample <- factor(log_df$Sample, levels=c("All children (FE only)",

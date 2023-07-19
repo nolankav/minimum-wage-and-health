@@ -713,8 +713,39 @@ main_df <- clean_coef_df(main_df)
 # Get min. and max. N
 min(main_df$n); max(main_df$n)
 
-# Generate coefficient plot: Main
-plot_main <- print_coef_plot(
+# Generate coefficient plot: Main (for main text)
+plot_main_1 <- ggplot(main_df, aes(x=Outcome, y=effect, group=Sample, color=Sample)) +
+  geom_hline(yintercept=0, color="black", linewidth=0.25) +
+  geom_point(position = position_dodge(width=0.6), size=1, aes(shape=Sample)) +
+  scale_shape_manual(values = 1:nlevels(main_df$Sample)) +
+  geom_errorbar(aes(ymin=effect-1.96*se, ymax=effect+1.96*se),
+                position = position_dodge(width=0.6), width=0.2) +
+  ylab("Association of $1 increase in min. wage\nwith adolescents' mental health") +
+  ggtitle("Adolescents (12-18), 2001-2019") +
+  theme_test() +
+  theme(legend.position = "bottom",
+        text = element_text(size = 10, face = "bold"),
+        axis.text.x = element_text(angle=45, hjust=1, vjust=1),
+        axis.title.x = element_blank(),
+        axis.ticks = element_blank(),
+        strip.background = element_blank(),
+        legend.title = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(color="light gray", linewidth=0.5),
+        panel.grid.minor.y = element_line(color="light gray", linewidth=0.25)) +
+  scale_y_continuous(limits = c(-0.045, 0.045),
+                     breaks = seq(-0.1, 0.1, 0.02),
+                     minor_breaks = seq(-0.1, 0.1, 0.01),
+                     labels = function(x) paste0(x*100," pp")) +
+  scale_color_grey(start=0.7, end=0) +
+  facet_grid(~Category, scales="free", space="free_x")
+
+# Export figure
+ggsave(plot=plot_main_1, file="Exhibits/YRBS coefficient plot, main 1.pdf",
+       width=5, height=4, units='in', dpi=600)
+
+# Generate coefficient plot: Main (for appendix)
+plot_main_2 <- print_coef_plot(
   main_df,
   Y_TITLE    = "Association of $1 increase in min. wage\nwith adolescents' mental health",
   Y_MIN      = -0.045,
@@ -723,7 +754,7 @@ plot_main <- print_coef_plot(
 )
 
 # Export figure
-ggsave(plot=plot_main, file="Exhibits/YRBS coefficient plot, main.pdf",
+ggsave(plot=plot_main_2, file="Exhibits/YRBS coefficient plot, main 2.pdf",
        width=5, height=4, units='in', dpi=600)
 
 ##############################################################################
@@ -1382,7 +1413,7 @@ ggsave(plot=plot_clust, file="Exhibits/YRBS coefficient plot, nested clusters.pd
        width=7, height=4, units='in', dpi=600)
 
 ##############################################################################
-# Functions for event study models
+# Functions for DID/event study models
 ##############################################################################
 
 # Treat year as categorical
@@ -1390,8 +1421,8 @@ yrbs_all_model$year_cat <- relevel(as.factor(yrbs_all_model$year), "2013")
 
 # Define treated and control states
 TREATED <- c("AR","DE","HI","MD","MT","NE","NJ","NY","SD","WV")
-CONTROL <- c("AL","GA","IA","ID","KS","KY","LA","MS","NC","ND","NH",
-             "NV","OK","PA","SC","TN","TX","UT","VA","WI","WY")
+CONTROL <- c("AL","GA","IA","ID","IN","KS","KY","LA","MS","NC","ND",
+             "NH","NV","OK","PA","SC","TN","TX","UT","VA","WI","WY")
 TREATED_2 <- cdlTools::fips(TREATED, to="FIPS")
 CONTROL_2 <- cdlTools::fips(CONTROL, to="FIPS")
 
@@ -1413,9 +1444,9 @@ yrbs_all_model <- yrbs_all_model %>% mutate(
 yrbs_event <- subset(yrbs_all_model, year %in% c(2011:2019) &
                        fipsst %in% c(TREATED_2, CONTROL_2))
 
-# Function to extract and clean values from TWFE models.
+# Function to extract and clean values from event study models.
 # Requires: Df for saving coefficients, "lfe" model, title of model.
-# Returns: Df of values, ready to pass to "clean_coef_df".
+# Returns: Df of values, requires cleaning before passing to "print_event_plot".
 make_event_df <- function(event_df, event_model, TITLE) {
   
   # Get outcome labels
@@ -1526,7 +1557,7 @@ print_event_plot <- function(event_df, Y_TITLE, Y_MIN, Y_MAX, COLORS) {
 }
 
 ##############################################################################
-# Graphs: Descriptives for event studies
+# Graphs: Descriptives for DID/event studies
 ##############################################################################
 
 # Make dataframe of states
@@ -1542,10 +1573,10 @@ event_map_df$fips <- cdlTools::fips(event_map_df$state_abb, to="FIPS")
 event_map_df <- event_map_df %>% mutate(
   value = case_when(
     state_abb %in% TREATED ~ "Raised min. wage in 2014-2015",
-    state_abb %in% CONTROL ~ "Never raised min. wage in 2011-2019",
+    state_abb %in% CONTROL ~ "Used federal min. from 2011-2019",
     TRUE ~ "Not included"
   ))
-event_map_df$value <- factor(event_map_df$value, levels = c("Raised min. wage in 2014-2015", "Never raised min. wage in 2011-2019", "Not included"))
+event_map_df$value <- factor(event_map_df$value, levels = c("Raised min. wage in 2014-2015", "Used federal min. from 2011-2019", "Not included"))
 
 # Map for event study states
 event_map <- plot_usmap(regions="states", data=event_map_df,
