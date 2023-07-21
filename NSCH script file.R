@@ -616,15 +616,14 @@ plot_means <- ggplot(means_all, aes(x=`FPL level`, y=value, fill=`FPL level`)) +
   xlab("Household FPL level") +
   theme_test() +
   theme(legend.position = "none",
-        text = element_text(size=10, face="bold"),
-        axis.ticks = element_blank(),
+        text = element_text(size = 10, face = "bold"),
         axis.text.x = element_text(angle=45, hjust=1, vjust=1),
-        panel.grid.major.y = element_line(color="gray", size=0.5),
-        panel.grid.minor.y = element_line(color="gray", size=0.25),
+        axis.ticks = element_blank(),
         strip.background = element_blank(),
-        panel.border = element_blank(),
-        panel.spacing = unit(0.5, "cm", data = NULL),
-        strip.text = element_text(size=10)) +
+        legend.title = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(color="light gray", linewidth=0.5),
+        panel.grid.minor.y = element_line(color="light gray", linewidth=0.25)) +
   scale_fill_grey(start=0, end=0.7, name="") +
   facet_wrap(~Outcome, nrow=3, scales="free") +
   facetted_pos_scales(
@@ -644,7 +643,7 @@ plot_means <- ggplot(means_all, aes(x=`FPL level`, y=value, fill=`FPL level`)) +
 
 # Export figure
 ggsave(plot=plot_means, file="Exhibits/NSCH adjusted rates of outcomes.pdf",
-       width=6, height=9, units='in', dpi=600)
+       width=5.5, height=7.5, units='in', dpi=600)
 
 ##############################################################################
 # Functions for TWFE models

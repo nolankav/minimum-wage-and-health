@@ -1421,7 +1421,7 @@ yrbs_all_model$year_cat <- relevel(as.factor(yrbs_all_model$year), "2013")
 
 # Define treated and control states
 TREATED <- c("AR","DE","HI","MD","MT","NE","NJ","NY","SD","WV")
-CONTROL <- c("AL","GA","IA","ID","IN","KS","KY","LA","MS","NC","ND",
+CONTROL <- c("AL","GA","IA","ID","KS","KY","LA","MS","NC","ND",
              "NH","NV","OK","PA","SC","TN","TX","UT","VA","WI","WY")
 TREATED_2 <- cdlTools::fips(TREATED, to="FIPS")
 CONTROL_2 <- cdlTools::fips(CONTROL, to="FIPS")
@@ -1633,6 +1633,12 @@ event_desc_1 <- plot_grid(event_map, event_desc_plot, rel_heights=c(0.7,1),
 ggsave(plot=event_desc_1, file="Exhibits/YRBS event studies, descriptives 1.pdf",
        width=6, height=5, units='in', dpi=600)
 
+# Get mean wages in treated states
+yrbs_all_model %>%
+  filter(fipsst %in% TREATED_2) %>%
+  group_by(treated_years) %>%
+  summarise(mean = weighted.mean(x=Effective.Minimum.Wage, w=weight_2))
+
 # Get mean wages in treated states by year
 mean_tx_wages <- yrbs_all_model %>%
   filter(fipsst %in% TREATED_2) %>%
@@ -1769,7 +1775,7 @@ modelsummary(list("(1)" = did_sad_1,
              coef_rename = c("event_treated:treated_years" =
                                "Effect of raise in wage"),
              statistic   = c("[{conf.low}, {conf.high}]"),
-             conf_level  = 0.99167,
+             # conf_level  = 0.99167,
              add_rows    = cov_row) %>%
   add_header_above(c(" " = 1, "Sad or hopeless" = 2, "Cons. suicide" = 2, "Att. suicide" = 2))
 
@@ -2072,7 +2078,7 @@ make_event_df_2 <- function(event_df, event_model, TITLE) {
 }
 
 # Define treated and control states
-TREATED_BALANCE <- c("AR","DE","HI","MD","MT","NE","NY","WV")
+TREATED_BALANCE <- c("AR","HI","MD","MT","NE","NY","WV")
 CONTROL_BALANCE <- c("ID","KY","NC","ND","NH","OK","SC","TN","VA")
 TREATED_BALANCE_2 <- cdlTools::fips(TREATED_BALANCE, to="FIPS")
 CONTROL_BALANCE_2 <- cdlTools::fips(CONTROL_BALANCE, to="FIPS")
@@ -2085,112 +2091,124 @@ yrbs_event <- yrbs_event %>% mutate(
   ))
 
 # Sad or hopeless
-event_sad_1 <- felm(sad_hopeless ~ event_tx_balance*year_cat |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
-event_sad_2 <- felm(sad_hopeless ~ event_tx_balance*year_cat +
-                      age_2 + sex_2 + race_eth_2 + grade_2 +
-                      elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
+event_sad_1b <- felm(sad_hopeless ~ event_tx_balance*year_cat |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
+event_sad_2b <- felm(sad_hopeless ~ event_tx_balance*year_cat +
+                       age_2 + sex_2 + race_eth_2 + grade_2 +
+                       elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
 
 # Considered suicide
-event_con_1 <- felm(cons_suicide ~ event_tx_balance*year_cat |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
-event_con_2 <- felm(cons_suicide ~ event_tx_balance*year_cat +
-                      age_2 + sex_2 + race_eth_2 + grade_2 +
-                      elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
+event_con_1b <- felm(cons_suicide ~ event_tx_balance*year_cat |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
+event_con_2b <- felm(cons_suicide ~ event_tx_balance*year_cat +
+                       age_2 + sex_2 + race_eth_2 + grade_2 +
+                       elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
 
 # Attempted suicide
-event_att_1 <- felm(suicide_att ~ event_tx_balance*year_cat |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
-event_att_2 <- felm(suicide_att ~ event_tx_balance*year_cat +
-                      age_2 + sex_2 + race_eth_2 + grade_2 +
-                      elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
+event_att_1b <- felm(suicide_att ~ event_tx_balance*year_cat |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
+event_att_2b <- felm(suicide_att ~ event_tx_balance*year_cat +
+                       age_2 + sex_2 + race_eth_2 + grade_2 +
+                       elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
 
 # Recent alcohol
-event_alc_1 <- felm(alcohol ~ event_tx_balance*year_cat |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
-event_alc_2 <- felm(alcohol ~ event_tx_balance*year_cat +
-                      age_2 + sex_2 + race_eth_2 + grade_2 +
-                      elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
+event_alc_1b <- felm(alcohol ~ event_tx_balance*year_cat |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
+event_alc_2b <- felm(alcohol ~ event_tx_balance*year_cat +
+                       age_2 + sex_2 + race_eth_2 + grade_2 +
+                       elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
 
 # Recent alcohol
-event_mjn_1 <- felm(marijuana ~ event_tx_balance*year_cat |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
-event_mjn_2 <- felm(marijuana ~ event_tx_balance*year_cat +
-                      age_2 + sex_2 + race_eth_2 + grade_2 +
-                      elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
+event_mjn_1b <- felm(marijuana ~ event_tx_balance*year_cat |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
+event_mjn_2b <- felm(marijuana ~ event_tx_balance*year_cat +
+                       age_2 + sex_2 + race_eth_2 + grade_2 +
+                       elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
 
 # Physical fight
-event_fgt_1 <- felm(fight ~ event_tx_balance*year_cat |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
-event_fgt_2 <- felm(fight ~ event_tx_balance*year_cat +
-                      age_2 + sex_2 + race_eth_2 + grade_2 +
-                      elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-                      age_year + fipsst | 0 | fipsst,
-                    data    = yrbs_event,
-                    weights = yrbs_event$weight_2)
+event_fgt_1b <- felm(fight ~ event_tx_balance*year_cat |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
+event_fgt_2b <- felm(fight ~ event_tx_balance*year_cat +
+                       age_2 + sex_2 + race_eth_2 + grade_2 +
+                       elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+                       age_year + fipsst | 0 | fipsst,
+                     data    = yrbs_event,
+                     weights = yrbs_event$weight_2)
 
 # Get values from models
-event_df <- NULL
+balance_df <- NULL
 
 # Adolescents (FE only)
-event_df <- make_event_df_2(event_df, event_sad_1, "Adolescents (FE only)")
-event_df <- make_event_df_2(event_df, event_con_1, "Adolescents (FE only)")
-event_df <- make_event_df_2(event_df, event_att_1, "Adolescents (FE only)")
-event_df <- make_event_df_2(event_df, event_alc_1, "Adolescents (FE only)")
-event_df <- make_event_df_2(event_df, event_mjn_1, "Adolescents (FE only)")
-event_df <- make_event_df_2(event_df, event_fgt_1, "Adolescents (FE only)")
+balance_df <- make_event_df_2(balance_df, event_sad_1b, "Adolescents (FE only)")
+balance_df <- make_event_df_2(balance_df, event_con_1b, "Adolescents (FE only)")
+balance_df <- make_event_df_2(balance_df, event_att_1b, "Adolescents (FE only)")
+balance_df <- make_event_df_2(balance_df, event_alc_1b, "Adolescents (FE only)")
+balance_df <- make_event_df_2(balance_df, event_mjn_1b, "Adolescents (FE only)")
+balance_df <- make_event_df_2(balance_df, event_fgt_1b, "Adolescents (FE only)")
 
 # Adolescents (fully adjusted)
-event_df <- make_event_df_2(event_df, event_sad_2, "Adolescents (fully adjusted)")
-event_df <- make_event_df_2(event_df, event_con_2, "Adolescents (fully adjusted)")
-event_df <- make_event_df_2(event_df, event_att_2, "Adolescents (fully adjusted)")
-event_df <- make_event_df_2(event_df, event_alc_2, "Adolescents (fully adjusted)")
-event_df <- make_event_df_2(event_df, event_mjn_2, "Adolescents (fully adjusted)")
-event_df <- make_event_df_2(event_df, event_fgt_2, "Adolescents (fully adjusted)")
+balance_df <- make_event_df_2(balance_df, event_sad_2b,
+                                "Adolescents (fully adjusted)")
+balance_df <- make_event_df_2(balance_df, event_con_2b,
+                                "Adolescents (fully adjusted)")
+balance_df <- make_event_df_2(balance_df, event_att_2b,
+                                "Adolescents (fully adjusted)")
+balance_df <- make_event_df_2(balance_df, event_alc_2b,
+                                "Adolescents (fully adjusted)")
+balance_df <- make_event_df_2(balance_df, event_mjn_2b,
+                                "Adolescents (fully adjusted)")
+balance_df <- make_event_df_2(balance_df, event_fgt_2b,
+                                "Adolescents (fully adjusted)")
 
 # Reorder outcomes
-event_df$outcome <- factor(
-  event_df$outcome, levels=c("Sad or hopeless", "Considered suicide", "Attempted suicide", "Recent alcohol", "Recent marijuana", "Physical fight"))
+balance_df$outcome <- factor(
+  balance_df$outcome, levels=c("Sad or hopeless", "Considered suicide", "Attempted suicide", "Recent alcohol", "Recent marijuana", "Physical fight"))
 
-# Generate event study plot: Main
+# Get min. and max. N
+balance_n <-
+  (c(length(event_sad_1b$residuals), length(event_sad_2b$residuals),
+     length(event_con_1b$residuals), length(event_con_2b$residuals),
+     length(event_att_1b$residuals), length(event_att_2b$residuals),
+     length(event_alc_1b$residuals), length(event_alc_2b$residuals),
+     length(event_mjn_1b$residuals), length(event_mjn_2b$residuals),
+     length(event_fgt_1b$residuals), length(event_fgt_2b$residuals)))
+min(balance_n); max(balance_n)
+
+# Generate event study plot: Balanced panel
 event_plot_balance <- print_event_plot(
-  event_df,
+  balance_df,
   Y_TITLE    = "Effect of raising minimum wage\non indicated outcome by year",
   Y_MIN      = -0.1,
   Y_MAX      =  0.1,
   COLORS     = "Standard"
 )
-
-# Compile figure
-event_all <- plot_grid(event_map, event_plot, nrow=2, rel_heights=c(0.3,0.7),
-                       labels=c("A.", "B."))
 
 # Export figure
 ggsave(plot=event_plot_balance, file="Exhibits/YRBS event studies, balanced.pdf",
