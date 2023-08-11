@@ -366,6 +366,10 @@ summary(tableby(~ sad_hopeless + cons_suicide + suicide_att +
                   alcohol + marijuana + fight,
                 yrbs_all_model, digits.pct=0, weights=weight_2), text=T)
 
+# State participation by year
+write.csv(table(yrbs_all_model$st_abbr.x, yrbs_all_model$year),
+          "Exhibits/YRBS state participation.csv")
+
 ##############################################################################
 # Graph: Map of minimum wages
 ##############################################################################
@@ -757,6 +761,44 @@ plot_main_2 <- print_coef_plot(
 ggsave(plot=plot_main_2, file="Exhibits/YRBS coefficient plot, main 2.pdf",
        width=5, height=4, units='in', dpi=600)
 
+# Additional row in table
+cov_row <- as.data.frame(
+  rbind(cbind("Demographic controls",     "No",  "Yes", "No",  "Yes", "No",  "Yes"),
+        cbind("State policy controls",    "No",  "Yes", "No",  "Yes", "No",  "Yes"),
+        cbind("State & age-by-year FEs",  "Yes", "Yes", "Yes", "Yes", "Yes", "Yes"),
+        cbind("Cluster robust SEs", "State", "State", "State", "State", "State", "State")))
+
+# Compile results into tables
+modelsummary(list("(1)" = model_min_sad_1,
+                  "(2)" = model_min_sad_2,
+                  "(1)" = model_min_con_1,
+                  "(2)" = model_min_con_2,
+                  "(1)" = model_min_att_1,
+                  "(2)" = model_min_att_2),
+             gof_omit    = "Log*|AIC|BIC|F|RMSE|Std",
+             coef_omit   = "^(?!Effective.Minimum.Wage)",
+             coef_rename = c("Effective.Minimum.Wage" =
+                               "$1 increase in min. wage"),
+             statistic   = c("[{conf.low}, {conf.high}]"),
+             # conf_level  = 0.99667,
+             add_rows    = cov_row) %>%
+  add_header_above(c(" " = 1, "Sad or hopeless" = 2, "Cons. suicide" = 2, "Att. suicide" = 2))
+
+modelsummary(list("(1)" = model_min_alc_1,
+                  "(2)" = model_min_alc_2,
+                  "(1)" = model_min_mjn_1,
+                  "(2)" = model_min_mjn_2,
+                  "(1)" = model_min_fgh_1,
+                  "(2)" = model_min_fgh_2),
+             gof_omit    = "Log*|AIC|BIC|F|RMSE|Std",
+             coef_omit   = "^(?!Effective.Minimum.Wage)",
+             coef_rename = c("Effective.Minimum.Wage" =
+                               "$1 increase in min. wage"),
+             statistic   = c("[{conf.low}, {conf.high}]"),
+             # conf_level  = 0.99667,
+             add_rows    = cov_row) %>%
+  add_header_above(c(" " = 1, "Alcohol" = 2, "Marijuana" = 2, "Phys. fight" = 2))
+
 ##############################################################################
 # TWFE robustness check: Sub-population
 ##############################################################################
@@ -1030,10 +1072,10 @@ log_min_mjn_2 <- svyglm(marijuana ~ Effective.Minimum.Wage +
                         design = design_yrbs, family="quasibinomial")
 
 # Physical fight
-log_min_fgt_1 <- svyglm(fight ~ Effective.Minimum.Wage +
+log_min_fgh_1 <- svyglm(fight ~ Effective.Minimum.Wage +
                           age_year + fipsst,
                         design = design_yrbs, family="quasibinomial")
-log_min_fgt_2 <- svyglm(fight ~ Effective.Minimum.Wage +
+log_min_fgh_2 <- svyglm(fight ~ Effective.Minimum.Wage +
                           age_2 + sex_2 + race_eth_2 + grade_2 +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 +
                           age_year + fipsst,
@@ -1098,14 +1140,14 @@ log_df <- as.data.frame(rbind(
   
   # Physical fight
   cbind("Physical fight", "School", "Adolescents (FE only)",
-        coef(log_min_fgt_1)[2],
-        SE(log_min_fgt_1)[2],
-        length(log_min_fgt_1$residuals)),
+        coef(log_min_fgh_1)[2],
+        SE(log_min_fgh_1)[2],
+        length(log_min_fgh_1$residuals)),
   
   cbind("Physical fight", "School", "Adolescents (fully adjusted)",
-        coef(log_min_fgt_2)[2],
-        SE(log_min_fgt_2)[2],
-        length(log_min_fgt_2$residuals))
+        coef(log_min_fgh_2)[2],
+        SE(log_min_fgh_2)[2],
+        length(log_min_fgh_2$residuals))
 ))
 
 # Name columns
@@ -1742,11 +1784,11 @@ did_mjn_2 <- felm(marijuana ~ event_treated*treated_years +
                   weights = yrbs_event$weight_2)
 
 # Physical fight
-did_fgt_1 <- felm(fight ~ event_treated*treated_years |
+did_fgh_1 <- felm(fight ~ event_treated*treated_years |
                     age_year + fipsst | 0 | fipsst,
                   data    = yrbs_event,
                   weights = yrbs_event$weight_2)
-did_fgt_2 <- felm(fight ~ event_treated*treated_years +
+did_fgh_2 <- felm(fight ~ event_treated*treated_years +
                     age_2 + sex_2 + race_eth_2 + grade_2 +
                     elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                     age_year + fipsst | 0 | fipsst,
@@ -1759,9 +1801,6 @@ cov_row <- as.data.frame(
         cbind("State policy controls",    "No",  "Yes", "No",  "Yes", "No",  "Yes"),
         cbind("State & age-by-year FEs",  "Yes", "Yes", "Yes", "Yes", "Yes", "Yes"),
         cbind("Cluster robust SEs", "State", "State", "State", "State", "State", "State")))
-
-# Load package
-library(modelsummary)
 
 # Compile results into tables
 modelsummary(list("(1)" = did_sad_1,
@@ -1783,8 +1822,8 @@ modelsummary(list("(1)" = did_alc_1,
                   "(2)" = did_alc_2,
                   "(1)" = did_mjn_1,
                   "(2)" = did_mjn_2,
-                  "(1)" = did_fgt_1,
-                  "(2)" = did_fgt_2),
+                  "(1)" = did_fgh_1,
+                  "(2)" = did_fgh_2),
              gof_omit    = "Log*|AIC|BIC|F|RMSE|Std",
              coef_omit   = "^(?!event_treated:treated_years)",
              coef_rename = c("event_treated:treated_years" =
@@ -1859,11 +1898,11 @@ event_mjn_2 <- felm(marijuana ~ event_treated*year_cat +
                     weights = yrbs_event$weight_2)
 
 # Physical fight
-event_fgt_1 <- felm(fight ~ event_treated*year_cat |
+event_fgh_1 <- felm(fight ~ event_treated*year_cat |
                       age_year + fipsst | 0 | fipsst,
                     data    = yrbs_event,
                     weights = yrbs_event$weight_2)
-event_fgt_2 <- felm(fight ~ event_treated*year_cat +
+event_fgh_2 <- felm(fight ~ event_treated*year_cat +
                       age_2 + sex_2 + race_eth_2 + grade_2 +
                       elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                       age_year + fipsst | 0 | fipsst,
@@ -1879,7 +1918,7 @@ event_df <- make_event_df(event_df, event_con_1, "Adolescents (FE only)")
 event_df <- make_event_df(event_df, event_att_1, "Adolescents (FE only)")
 event_df <- make_event_df(event_df, event_alc_1, "Adolescents (FE only)")
 event_df <- make_event_df(event_df, event_mjn_1, "Adolescents (FE only)")
-event_df <- make_event_df(event_df, event_fgt_1, "Adolescents (FE only)")
+event_df <- make_event_df(event_df, event_fgh_1, "Adolescents (FE only)")
 
 # Adolescents (fully adjusted)
 event_df <- make_event_df(event_df, event_sad_2, "Adolescents (fully adjusted)")
@@ -1887,7 +1926,7 @@ event_df <- make_event_df(event_df, event_con_2, "Adolescents (fully adjusted)")
 event_df <- make_event_df(event_df, event_att_2, "Adolescents (fully adjusted)")
 event_df <- make_event_df(event_df, event_alc_2, "Adolescents (fully adjusted)")
 event_df <- make_event_df(event_df, event_mjn_2, "Adolescents (fully adjusted)")
-event_df <- make_event_df(event_df, event_fgt_2, "Adolescents (fully adjusted)")
+event_df <- make_event_df(event_df, event_fgh_2, "Adolescents (fully adjusted)")
 
 # Reorder outcomes
 event_df$outcome <- factor(
@@ -1971,11 +2010,11 @@ event_mjn_2c <- felm(marijuana ~ event_treated*year_cat +
                      weights = yrbs_event$weight_2)
 
 # Physical fight
-event_fgt_1c <- felm(fight ~ event_treated*year_cat |
+event_fgh_1c <- felm(fight ~ event_treated*year_cat |
                        age_year + fipsst | 0 | cluster,
                      data    = yrbs_event,
                      weights = yrbs_event$weight_2)
-event_fgt_2c <- felm(fight ~ event_treated*year_cat +
+event_fgh_2c <- felm(fight ~ event_treated*year_cat +
                        age_2 + sex_2 + race_eth_2 + grade_2 +
                        elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                        age_year + fipsst | 0 | cluster,
@@ -1991,7 +2030,7 @@ ev_clust_df <- make_event_df(ev_clust_df, event_con_1c, "Adolescents (FE only, n
 ev_clust_df <- make_event_df(ev_clust_df, event_att_1c, "Adolescents (FE only, nested clust.)")
 ev_clust_df <- make_event_df(ev_clust_df, event_alc_1c, "Adolescents (FE only, nested clust.)")
 ev_clust_df <- make_event_df(ev_clust_df, event_mjn_1c, "Adolescents (FE only, nested clust.)")
-ev_clust_df <- make_event_df(ev_clust_df, event_fgt_1c, "Adolescents (FE only, nested clust.)")
+ev_clust_df <- make_event_df(ev_clust_df, event_fgh_1c, "Adolescents (FE only, nested clust.)")
 
 # Adolescents (fully adj., nested clust.)
 ev_clust_df <- make_event_df(ev_clust_df, event_sad_2c,
@@ -2004,7 +2043,7 @@ ev_clust_df <- make_event_df(ev_clust_df, event_alc_2c,
                              "Adolescents (fully adj., nested clust.)")
 ev_clust_df <- make_event_df(ev_clust_df, event_mjn_2c,
                              "Adolescents (fully adj., nested clust.)")
-ev_clust_df <- make_event_df(ev_clust_df, event_fgt_2c,
+ev_clust_df <- make_event_df(ev_clust_df, event_fgh_2c,
                              "Adolescents (fully adj., nested clust.)")
 
 # Reorder outcomes
@@ -2151,11 +2190,11 @@ event_mjn_2b <- felm(marijuana ~ event_tx_balance*year_cat +
                      weights = yrbs_event$weight_2)
 
 # Physical fight
-event_fgt_1b <- felm(fight ~ event_tx_balance*year_cat |
+event_fgh_1b <- felm(fight ~ event_tx_balance*year_cat |
                        age_year + fipsst | 0 | fipsst,
                      data    = yrbs_event,
                      weights = yrbs_event$weight_2)
-event_fgt_2b <- felm(fight ~ event_tx_balance*year_cat +
+event_fgh_2b <- felm(fight ~ event_tx_balance*year_cat +
                        age_2 + sex_2 + race_eth_2 + grade_2 +
                        elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                        age_year + fipsst | 0 | fipsst,
@@ -2171,7 +2210,7 @@ balance_df <- make_event_df_2(balance_df, event_con_1b, "Adolescents (FE only)")
 balance_df <- make_event_df_2(balance_df, event_att_1b, "Adolescents (FE only)")
 balance_df <- make_event_df_2(balance_df, event_alc_1b, "Adolescents (FE only)")
 balance_df <- make_event_df_2(balance_df, event_mjn_1b, "Adolescents (FE only)")
-balance_df <- make_event_df_2(balance_df, event_fgt_1b, "Adolescents (FE only)")
+balance_df <- make_event_df_2(balance_df, event_fgh_1b, "Adolescents (FE only)")
 
 # Adolescents (fully adjusted)
 balance_df <- make_event_df_2(balance_df, event_sad_2b,
@@ -2184,7 +2223,7 @@ balance_df <- make_event_df_2(balance_df, event_alc_2b,
                                 "Adolescents (fully adjusted)")
 balance_df <- make_event_df_2(balance_df, event_mjn_2b,
                                 "Adolescents (fully adjusted)")
-balance_df <- make_event_df_2(balance_df, event_fgt_2b,
+balance_df <- make_event_df_2(balance_df, event_fgh_2b,
                                 "Adolescents (fully adjusted)")
 
 # Reorder outcomes
@@ -2198,7 +2237,7 @@ balance_n <-
      length(event_att_1b$residuals), length(event_att_2b$residuals),
      length(event_alc_1b$residuals), length(event_alc_2b$residuals),
      length(event_mjn_1b$residuals), length(event_mjn_2b$residuals),
-     length(event_fgt_1b$residuals), length(event_fgt_2b$residuals)))
+     length(event_fgh_1b$residuals), length(event_fgh_2b$residuals)))
 min(balance_n); max(balance_n)
 
 # Generate event study plot: Balanced panel
