@@ -1,7 +1,7 @@
 # Minimum wage and children's mental health
 # Analyses using the Youth Risk Behavior Surveillance System
 # N.M. Kavanagh, M. McConnell, N. Slopen
-# July 17, 2023
+# August 12, 2023
 
 # Please direct questions about this script file to nolankavanagh@fas.harvard.edu.
 
@@ -498,7 +498,7 @@ make_coef_df <- function(coef_df, model, TITLE) {
   
   if (model$lhs == "fight") {
     outcome  <- "Physical fight"
-    category <- "School"}
+    category <- "Violence"}
   
   # Add row to coefficient df
   coef_df <- rbind(coef_df, cbind(
@@ -530,7 +530,7 @@ clean_coef_df <- function(coef_df) {
   
   # Reorder categories
   coef_df$Category <- factor(
-    coef_df$Category, levels=c("Symptoms", "Substances", "School"))
+    coef_df$Category, levels=c("Symptoms", "Substances", "Violence"))
   
   # Reorder samples
   coef_df$Sample <- factor(
@@ -803,53 +803,104 @@ modelsummary(list("(1)" = model_min_alc_1,
 # TWFE robustness check: Sub-population
 ##############################################################################
 
+# # Sad or hopeless
+# model_min_sad_r <- felm(sad_hopeless ~ Effective.Minimum.Wage*race_eth_cat +
+#                           age_2 + sex_2 + race_eth_2 + grade_2 +
+#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+#                           age_year + fipsst | 0 | fipsst,
+#                         data    = yrbs_all_model,
+#                         weights = yrbs_all_model$weight_2)
+# 
+# # Considered suicide
+# model_min_con_r <- felm(cons_suicide ~ Effective.Minimum.Wage*race_eth_cat +
+#                           age_2 + sex_2 + race_eth_2 + grade_2 +
+#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+#                           age_year + fipsst | 0 | fipsst,
+#                         data    = yrbs_all_model,
+#                         weights = yrbs_all_model$weight_2)
+# 
+# # Attempted suicide
+# model_min_att_r <- felm(suicide_att ~ Effective.Minimum.Wage*race_eth_cat +
+#                           age_2 + sex_2 + race_eth_2 + grade_2 +
+#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+#                           age_year + fipsst | 0 | fipsst,
+#                         data    = yrbs_all_model,
+#                         weights = yrbs_all_model$weight_2)
+# 
+# # Recent alcohol
+# model_min_alc_r <- felm(alcohol ~ Effective.Minimum.Wage*race_eth_cat +
+#                           age_2 + sex_2 + race_eth_2 + grade_2 +
+#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+#                           age_year + fipsst | 0 | fipsst,
+#                         data    = yrbs_all_model,
+#                         weights = yrbs_all_model$weight_2)
+# 
+# # Recent marijuana
+# model_min_mjn_r <- felm(marijuana ~ Effective.Minimum.Wage*race_eth_cat +
+#                           age_2 + sex_2 + race_eth_2 + grade_2 +
+#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+#                           age_year + fipsst | 0 | fipsst,
+#                         data    = yrbs_all_model,
+#                         weights = yrbs_all_model$weight_2)
+# 
+# # Physical fight
+# model_min_fgh_r <- felm(fight ~ Effective.Minimum.Wage*race_eth_cat +
+#                           age_2 + sex_2 + race_eth_2 + grade_2 +
+#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
+#                           age_year + fipsst | 0 | fipsst,
+#                         data    = yrbs_all_model,
+#                         weights = yrbs_all_model$weight_2)
+
+# Generate subgroup of interest
+yrbs_all_model_r <- subset(yrbs_all_model, race7 %in% c(3:4)) # Black or Hispanic/Latino
+
 # Sad or hopeless
-model_min_sad_r <- felm(sad_hopeless ~ Effective.Minimum.Wage*race_eth_cat +
+model_min_sad_r <- felm(sad_hopeless ~ Effective.Minimum.Wage +
                           age_2 + sex_2 + race_eth_2 + grade_2 +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | fipsst,
-                        data    = yrbs_all_model,
-                        weights = yrbs_all_model$weight_2)
+                        data    = yrbs_all_model_r,
+                        weights = yrbs_all_model_r$weight_2)
 
 # Considered suicide
-model_min_con_r <- felm(cons_suicide ~ Effective.Minimum.Wage*race_eth_cat +
+model_min_con_r <- felm(cons_suicide ~ Effective.Minimum.Wage +
                           age_2 + sex_2 + race_eth_2 + grade_2 +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | fipsst,
-                        data    = yrbs_all_model,
-                        weights = yrbs_all_model$weight_2)
+                        data    = yrbs_all_model_r,
+                        weights = yrbs_all_model_r$weight_2)
 
 # Attempted suicide
-model_min_att_r <- felm(suicide_att ~ Effective.Minimum.Wage*race_eth_cat +
+model_min_att_r <- felm(suicide_att ~ Effective.Minimum.Wage +
                           age_2 + sex_2 + race_eth_2 + grade_2 +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | fipsst,
-                        data    = yrbs_all_model,
-                        weights = yrbs_all_model$weight_2)
+                        data    = yrbs_all_model_r,
+                        weights = yrbs_all_model_r$weight_2)
 
 # Recent alcohol
-model_min_alc_r <- felm(alcohol ~ Effective.Minimum.Wage*race_eth_cat +
+model_min_alc_r <- felm(alcohol ~ Effective.Minimum.Wage +
                           age_2 + sex_2 + race_eth_2 + grade_2 +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | fipsst,
-                        data    = yrbs_all_model,
-                        weights = yrbs_all_model$weight_2)
+                        data    = yrbs_all_model_r,
+                        weights = yrbs_all_model_r$weight_2)
 
 # Recent marijuana
-model_min_mjn_r <- felm(marijuana ~ Effective.Minimum.Wage*race_eth_cat +
+model_min_mjn_r <- felm(marijuana ~ Effective.Minimum.Wage +
                           age_2 + sex_2 + race_eth_2 + grade_2 +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | fipsst,
-                        data    = yrbs_all_model,
-                        weights = yrbs_all_model$weight_2)
+                        data    = yrbs_all_model_r,
+                        weights = yrbs_all_model_r$weight_2)
 
 # Physical fight
-model_min_fgh_r <- felm(fight ~ Effective.Minimum.Wage*race_eth_cat +
+model_min_fgh_r <- felm(fight ~ Effective.Minimum.Wage +
                           age_2 + sex_2 + race_eth_2 + grade_2 +
                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
                           age_year + fipsst | 0 | fipsst,
-                        data    = yrbs_all_model,
-                        weights = yrbs_all_model$weight_2)
+                        data    = yrbs_all_model_r,
+                        weights = yrbs_all_model_r$weight_2)
 
 # Get values from models
 sub_df <- NULL
@@ -1139,12 +1190,12 @@ log_df <- as.data.frame(rbind(
         length(log_min_mjn_2$residuals)),
   
   # Physical fight
-  cbind("Physical fight", "School", "Adolescents (FE only)",
+  cbind("Physical fight", "Violence", "Adolescents (FE only)",
         coef(log_min_fgh_1)[2],
         SE(log_min_fgh_1)[2],
         length(log_min_fgh_1$residuals)),
   
-  cbind("Physical fight", "School", "Adolescents (fully adjusted)",
+  cbind("Physical fight", "Violence", "Adolescents (fully adjusted)",
         coef(log_min_fgh_2)[2],
         SE(log_min_fgh_2)[2],
         length(log_min_fgh_2$residuals))
@@ -1159,7 +1210,7 @@ log_df$Outcome <- factor(
 
 # Reorder categories
 log_df$Category <- factor(
-  log_df$Category, levels=c("Symptoms", "Substances", "School"))
+  log_df$Category, levels=c("Symptoms", "Substances", "Violence"))
 
 # Reorder samples
 log_df$Sample <- factor(log_df$Sample, levels=c("Adolescents (FE only)",
