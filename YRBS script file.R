@@ -1607,6 +1607,9 @@ print_event_plot <- function(event_df, Y_TITLE, Y_MIN, Y_MAX, COLORS) {
     # Null line
     geom_hline(yintercept=0, color="black") +
     
+    # Event line
+    geom_vline(xintercept=2013.5, color="black", linetype="dashed") +
+    
     # Confidence intervals
     geom_errorbar(aes(ymin=effect-1.96*se, ymax=effect+1.96*se),
                   position = position_dodge(width=0.6), width=0, linewidth=0.8) +
