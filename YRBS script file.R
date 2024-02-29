@@ -1,7 +1,7 @@
 # Minimum wage and children's mental health
 # Analyses using the Youth Risk Behavior Surveillance System
 # N.M. Kavanagh, M. McConnell, N. Slopen
-# August 12, 2023
+# November 10, 2023
 
 # Please direct questions about this script file to nolankavanagh@fas.harvard.edu.
 
@@ -761,95 +761,49 @@ plot_main_2 <- print_coef_plot(
 ggsave(plot=plot_main_2, file="Exhibits/YRBS coefficient plot, main 2.pdf",
        width=5, height=4, units='in', dpi=600)
 
-# Additional row in table
-cov_row <- as.data.frame(
-  rbind(cbind("Demographic controls",     "No",  "Yes", "No",  "Yes", "No",  "Yes"),
-        cbind("State policy controls",    "No",  "Yes", "No",  "Yes", "No",  "Yes"),
-        cbind("State & age-by-year FEs",  "Yes", "Yes", "Yes", "Yes", "Yes", "Yes"),
-        cbind("Cluster robust SEs", "State", "State", "State", "State", "State", "State")))
+# Variable names for table
+var_names <- 
+  c("Effective.Minimum.Wage" = "$1 increase in minimum wage",
+    "sex_2Female" = "Female",
+    "race_eth_2Black, non-Hispanic/Latino" = "Black, non-Hispanic/Latino",
+    "race_eth_2Hispanic/Latino" = "Hispanic/Latino",
+    "race_eth_2American Indian or Alaska Native" =
+      "American Indian or Alaska Native",
+    "race_eth_2Asian, Native Hawaiian, or Pacific Islander" =
+      "Asian, Native Hawaiian, or Pacific Islander",
+    "race_eth_2Other or mixed race" = "Other or mixed race",
+    "grade_210th grade" = "10th grade",
+    "grade_211th grade" = "11th grade",
+    "grade_212th grade" = "12th grade",
+    "elig_1_5"  = "Medicare income eligibility limit, age 1-5",
+    "elig_6_18" = "Medicare income eligibility limit, age 6-18",
+    "has_eitc" = "State has EITC",
+    "federal_pct" = "State EITC as percent of federal",
+    "refundable" = "State EITC is refundable",
+    "max_bft_3" = "Maximum TANF benefit for family of 3")
 
 # Compile results into tables
-modelsummary(list("(1)" = model_min_sad_1,
-                  "(2)" = model_min_sad_2,
-                  "(1)" = model_min_con_1,
-                  "(2)" = model_min_con_2,
-                  "(1)" = model_min_att_1,
-                  "(2)" = model_min_att_2),
+modelsummary(list("FE only"    = model_min_sad_1,
+                  "Fully adj." = model_min_sad_2,
+                  "FE only"    = model_min_con_1,
+                  "Fully adj." = model_min_con_2,
+                  "FE only"    = model_min_att_1,
+                  "Fully adj." = model_min_att_2,
+                  "FE only"    = model_min_alc_1,
+                  "Fully adj." = model_min_alc_2,
+                  "FE only"    = model_min_mjn_1,
+                  "Fully adj." = model_min_mjn_2,
+                  "FE only"    = model_min_fgh_1,
+                  "Fully adj." = model_min_fgh_2),
              gof_omit    = "Log*|AIC|BIC|F|RMSE|Std",
-             coef_omit   = "^(?!Effective.Minimum.Wage)",
-             coef_rename = c("Effective.Minimum.Wage" =
-                               "$1 increase in min. wage"),
-             statistic   = c("[{conf.low}, {conf.high}]"),
-             # conf_level  = 0.99667,
-             add_rows    = cov_row) %>%
-  add_header_above(c(" " = 1, "Sad or hopeless" = 2, "Cons. suicide" = 2, "Att. suicide" = 2))
-
-modelsummary(list("(1)" = model_min_alc_1,
-                  "(2)" = model_min_alc_2,
-                  "(1)" = model_min_mjn_1,
-                  "(2)" = model_min_mjn_2,
-                  "(1)" = model_min_fgh_1,
-                  "(2)" = model_min_fgh_2),
-             gof_omit    = "Log*|AIC|BIC|F|RMSE|Std",
-             coef_omit   = "^(?!Effective.Minimum.Wage)",
-             coef_rename = c("Effective.Minimum.Wage" =
-                               "$1 increase in min. wage"),
-             statistic   = c("[{conf.low}, {conf.high}]"),
-             # conf_level  = 0.99667,
-             add_rows    = cov_row) %>%
-  add_header_above(c(" " = 1, "Alcohol" = 2, "Marijuana" = 2, "Phys. fight" = 2))
+             coef_rename = var_names,
+             statistic   = c("(({std.error}))", "P={p.value}"),
+             fmt         = fmt_statistic("estimate" = 4, "std.error" = 4, "p.value" = 3),
+             output      = "YRBS table, main models.csv")
 
 ##############################################################################
 # TWFE robustness check: Sub-population
 ##############################################################################
-
-# # Sad or hopeless
-# model_min_sad_r <- felm(sad_hopeless ~ Effective.Minimum.Wage*race_eth_cat +
-#                           age_2 + sex_2 + race_eth_2 + grade_2 +
-#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-#                           age_year + fipsst | 0 | fipsst,
-#                         data    = yrbs_all_model,
-#                         weights = yrbs_all_model$weight_2)
-# 
-# # Considered suicide
-# model_min_con_r <- felm(cons_suicide ~ Effective.Minimum.Wage*race_eth_cat +
-#                           age_2 + sex_2 + race_eth_2 + grade_2 +
-#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-#                           age_year + fipsst | 0 | fipsst,
-#                         data    = yrbs_all_model,
-#                         weights = yrbs_all_model$weight_2)
-# 
-# # Attempted suicide
-# model_min_att_r <- felm(suicide_att ~ Effective.Minimum.Wage*race_eth_cat +
-#                           age_2 + sex_2 + race_eth_2 + grade_2 +
-#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-#                           age_year + fipsst | 0 | fipsst,
-#                         data    = yrbs_all_model,
-#                         weights = yrbs_all_model$weight_2)
-# 
-# # Recent alcohol
-# model_min_alc_r <- felm(alcohol ~ Effective.Minimum.Wage*race_eth_cat +
-#                           age_2 + sex_2 + race_eth_2 + grade_2 +
-#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-#                           age_year + fipsst | 0 | fipsst,
-#                         data    = yrbs_all_model,
-#                         weights = yrbs_all_model$weight_2)
-# 
-# # Recent marijuana
-# model_min_mjn_r <- felm(marijuana ~ Effective.Minimum.Wage*race_eth_cat +
-#                           age_2 + sex_2 + race_eth_2 + grade_2 +
-#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-#                           age_year + fipsst | 0 | fipsst,
-#                         data    = yrbs_all_model,
-#                         weights = yrbs_all_model$weight_2)
-# 
-# # Physical fight
-# model_min_fgh_r <- felm(fight ~ Effective.Minimum.Wage*race_eth_cat +
-#                           age_2 + sex_2 + race_eth_2 + grade_2 +
-#                           elig_1_5 + elig_6_18 + has_eitc + federal_pct + refundable + max_bft_3 |
-#                           age_year + fipsst | 0 | fipsst,
-#                         data    = yrbs_all_model,
-#                         weights = yrbs_all_model$weight_2)
 
 # Generate subgroup of interest
 yrbs_all_model_r <- subset(yrbs_all_model, race7 %in% c(3:4)) # Black or Hispanic/Latino
@@ -916,11 +870,12 @@ sub_df <- make_coef_df(sub_df, model_min_fgh_r, "Black or Hispanic/Latino")
 # Clean dataframe of coefficients
 sub_df <- clean_coef_df(sub_df)
 
+# Get min. and max. N
+# Before adding main models
+min(sub_df$n); max(sub_df$n)
+
 # Add main models for comparison
 sub_df <- rbind(sub_df, main_df %>% filter(Sample == "Adolescents (fully adjusted)"))
-
-# Get min. and max. N
-min(sub_df$n); max(sub_df$n)
 
 # Generate coefficient plot: Sub-population
 plot_sub <- print_coef_plot(
